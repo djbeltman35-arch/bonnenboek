@@ -315,7 +315,7 @@ function settingsSheet(){
     <div class="actions"><button class="btn primary" data-share>Uitnodiging delen</button><button class="btn ghost" data-copy>Link kopiëren</button></div>
     <label class="field"><span class="lbl">Jouw naam (zichtbaar bij je bonnen)</span><input class="inp" id="sNaam" value="${esc(st.mijnNaam)}"></label>
     <p class="note">Laatst bijgewerkt: ${esc(last)}${pend?` · ${pend} wijziging${pend>1?"en":""} wacht${pend>1?"en":""} op verbinding`:""}</p>
-    ${isStandalone()?"":`<button class="btn ghost" data-install>App installeren op dit toestel</button>`}
+    <div class="actions">${isStandalone()?"":`<button class="btn ghost" data-install>App installeren</button>`}<a class="btn ghost" href="/handleiding.pdf" target="_blank" rel="noopener">Handleiding (PDF)</a></div>
     <button class="linkbtn" data-leave style="align-self:flex-start;color:var(--bad)">Dit toestel loskoppelen van het huishouden</button>`,
   sh=>{ sh.querySelector("[data-share]").onclick=shareInvite;
     sh.querySelector("[data-copy]").onclick=()=>copy(inviteLink(),"Link gekopieerd");
