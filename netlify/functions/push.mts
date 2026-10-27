@@ -34,7 +34,15 @@ export default async (req: Request) => {
     return json({ ok: true });
   }
   if (req.method === "PUT") {
-    const r = await meldPersoon(code!, String(body.naam ?? ""), { title: "Bonnenboek", body: "Meldingen staan aan op dit toestel.", url: "/#overzicht" });
+    const eur = (c: number) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(c / 100);
+    const bericht = body.soort === "betaald"
+      ? {
+          title: `${String(body.van ?? "Iemand").slice(0, 40)} heeft betaald`,
+          body: `${eur(Math.max(0, Math.round(Number(body.cent) || 0)))} voor ${Math.max(1, Math.round(Number(body.aantal) || 1))} bon${Number(body.aantal) > 1 ? "nen" : ""} is op betaald gezet.`,
+          url: "/#verzoeken",
+        }
+      : { title: "Bonnenboek", body: "Meldingen staan aan op dit toestel.", url: "/#overzicht" };
+    const r = await meldPersoon(code!, String(body.naam ?? ""), bericht);
     return json(r);
   }
   return fout("Methode niet toegestaan.", 405);

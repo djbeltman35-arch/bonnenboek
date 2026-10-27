@@ -70,6 +70,7 @@ async function flushQueue(){
     else if(op.t==="del"){ await api("DELETE",`/api/bonnen?code=${encodeURIComponent(st.code)}&id=${encodeURIComponent(op.id)}`) }
     else if(op.t==="budget"){ await api("PATCH","/api/bonnen",{code:st.code,budgetCent:op.c}) }
     else if(op.t==="inst"){ await api("PATCH","/api/bonnen",{code:st.code,instellingen:op.patch}) }
+    else if(op.t==="notify"){ await api("PUT","/api/push",{code:st.code,naam:op.naar,soort:"betaald",van:op.van,cent:op.cent,aantal:op.aantal}).catch(()=>{}) }
     st.queue.shift(); save();
   }
 }
@@ -168,6 +169,7 @@ function verzoeken(){ const out=[];
     if(!same(buyer(r),g.van)||(r.aangemaakt||"")<g.sinds) continue;
     out.push({bon:r,van:g.van,aan:g.aan,cent:Math.round((r.totaalCent||0)*g.pct/100),betaald:!!r.verrekend}) }
   return out.sort((a,b)=>sortRec(a.bon,b.bon)) }
+function verzoekVoor(r){ const g=st.regels.find(g=>same(buyer(r),g.van)&&(r.aangemaakt||"")>=g.sinds); return g?{...g,cent:Math.round((r.totaalCent||0)*g.pct/100)}:null }
 function pairs(list){ const m=new Map(); for(const v of list){ const k=v.van.toLowerCase()+"→"+v.aan.toLowerCase(); if(!m.has(k)) m.set(k,{van:v.van,aan:v.aan,items:[]}); m.get(k).items.push(v) } return [...m.values()] }
 function requestBanner(){
   if(!st.mijnNaam||!st.regels.length) return "";
@@ -202,7 +204,11 @@ function verzoekenSheet(){
     ${groups.length?body:`<div class="empty"><h3>Alles is verrekend</h3><p>Er staan geen betaalverzoeken open.</p></div>`}
     ${done.length?`<span class="lbl">Laatst verrekend</span><div class="detail-items">${done.map(v=>`<div class="r"><span>${esc(v.bon.winkel)} · ${esc(v.aan)} &gt; ${esc(v.van)}<small>betaald ${esc(new Date(v.bon.verrekend.op).toLocaleDateString("nl-NL",{day:"numeric",month:"short"}))}</small></span><span style="display:flex;gap:10px;align-items:center"><span class="num">${eur(v.cent)}</span><button class="linkbtn" data-undo="${esc(v.bon.id)}">ongedaan</button></span></div>`).join("")}</div>`:""}
     ${!st.regels.length?`<p class="note">Er zijn nog geen betaalregels. Stel ze in bij de naam van het huishouden &gt; Betaalverzoeken.</p>`:""}`,
-  sh=>{ const mark=(ids,val)=>{ for(const id of ids){ const b=st.bonnen[id]; if(!b) continue; putBon({...JSON.parse(JSON.stringify(b)),verrekend:val?{op:new Date().toISOString(),door:st.mijnNaam}:null}) } };
+  sh=>{ const mark=(ids,val)=>{ const per={};
+      for(const id of ids){ const b=st.bonnen[id]; if(!b) continue; const v=verzoekVoor(b);
+        if(val&&v){ const k=v.van; per[k]=per[k]||{cent:0,n:0}; per[k].cent+=v.cent; per[k].n++ }
+        putBon({...JSON.parse(JSON.stringify(b)),verrekend:val?{op:new Date().toISOString(),door:st.mijnNaam}:null}) }
+      for(const [naar,o] of Object.entries(per)) if(!same(naar,st.mijnNaam)){ st.queue.push({t:"notify",naar,van:st.mijnNaam||"Iemand",cent:o.cent,aantal:o.n}); save(); sync() } };
     sh.querySelectorAll("[data-paid]").forEach(b=>b.onclick=()=>{ mark([b.dataset.paid],true); toast("Op betaald gezet"); verzoekenSheet() });
     sh.querySelectorAll("[data-undo]").forEach(b=>b.onclick=()=>{ mark([b.dataset.undo],false); verzoekenSheet() });
     sh.querySelectorAll("[data-paidall]").forEach(b=>b.onclick=()=>{ const g=groups[+b.dataset.paidall]; mark(g.items.map(v=>v.bon.id),true); toast(`${eur(g.items.reduce((a,v)=>a+v.cent,0))} verrekend`); verzoekenSheet() });
@@ -336,10 +342,11 @@ function renderOverview(){
 function catBars(cats){ const max=Math.max(...cats.map(c=>Math.abs(c[1])),1);
   return `<div class="bars">${cats.map(([n,v])=>{ const i=CATS.indexOf(n); const col=n==="Niet ingedeeld"?"var(--muted)":CAT_COLOR(i<0?7:i);
     return `<div class="bar"><span class="n">${esc(n)}</span><span class="v">${eur(v)}</span><span class="t"><i style="width:${Math.max(2,Math.abs(v)/max*100)}%;background:${col}"></i></span></div>` }).join("")}</div>` }
-function slip(r){ const n=(r.items||[]).length;
+function slip(r){ const n=(r.items||[]).length; const v=verzoekVoor(r);
+  const vtag=v?(r.verrekend?'<span class="tag paid">betaald</span>':'<span class="tag open">open</span>'):"";
   return `<button class="slip" data-open="${esc(r.id)}">
     <span class="store" style="background:${storeColor(r.winkel)}">${esc(initials(r.winkel))}</span>
-    <span style="min-width:0;display:flex;flex-direction:column"><span class="nm">${esc(r.winkel)}${r._pend?'<span class="tag pend">nog niet gedeeld</span>':(r.bron==="scan"?'<span class="tag">gescand</span>':"")}</span><span class="who">${n?n+" product"+(n===1?"":"en"):"Alleen totaal"}${" · "+esc(payer(r))}</span></span>
+    <span style="min-width:0;display:flex;flex-direction:column"><span class="nm">${esc(r.winkel)}${r._pend?'<span class="tag pend">nog niet gedeeld</span>':""}${vtag||(r.bron==="scan"&&!r._pend?'<span class="tag">gescand</span>':"")}</span><span class="who">${n?n+" product"+(n===1?"":"en"):"Alleen totaal"}${" · "+esc(payer(r))}</span></span>
     <span class="amt">${eur(r.totaalCent)}</span></button>` }
 
 function renderList(){
@@ -393,7 +400,9 @@ const head = t => `<header><h2>${esc(t)}</h2><button class="iconbtn" data-x aria
 function detailSheet(id){
   const r=st.bonnen[id]; if(!r) return; const items=r.items||[]; const rest=r.totaalCent-sumItems(items);
   openSheet(`${head(r.winkel)}
-    <div class="receipt-head"><b>${eur(r.totaalCent)}</b><span class="note">${esc(dayLabel(r.datum))}${r.betaalwijze?" · "+esc(r.betaalwijze):""}</span><span class="note">Ingevoerd door <b>${esc(buyer(r))}</b></span></div>
+    <div class="receipt-head"><b>${eur(r.totaalCent)}</b><span class="note">${esc(dayLabel(r.datum))}${r.betaalwijze?" · "+esc(r.betaalwijze):""}</span><span class="note">Ingevoerd door <b>${esc(buyer(r))}</b></span>${(()=>{ const v=verzoekVoor(r); if(!v) return "";
+      return r.verrekend?`<span class="tag paid" style="align-self:center;margin:6px 0 0">Betaalverzoek ${eur(v.cent)} aan ${esc(v.van)} · betaald ${esc(new Date(r.verrekend.op).toLocaleDateString("nl-NL",{day:"numeric",month:"short"}))}</span>`
+        :`<span class="tag open" style="align-self:center;margin:6px 0 0">Betaalverzoek ${eur(v.cent)}: ${esc(v.aan)} betaalt ${esc(v.van)} · open</span>` })()}</div>
     ${items.length?`<div class="detail-items">${items.map(i=>`<div class="r"><span>${esc(i.naam)}${i.aantal>1?" ×"+i.aantal:""}<small>${esc(i.cat)}</small></span><span class="num">${eur(i.cent)}</span></div>`).join("")}</div>`:'<p class="note">Voor deze bon is alleen het totaal ingevoerd.</p>'}
     ${items.length&&Math.abs(rest)>1?`<p class="note">Verschil met totaal: <span class="num diff">${eur(rest)}</span></p>`:""}
     <div class="actions" id="dAct"><button class="btn primary" data-edit>Bewerken</button><button class="btn danger" data-del>Verwijderen</button></div>`,
