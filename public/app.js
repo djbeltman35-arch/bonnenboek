@@ -153,24 +153,6 @@ function knownPeople(){ const set=new Map(); const add=n=>{ n=String(n||"").trim
 function byPerson(list){ const map={}; for(const r of list){ const k=payer(r); map[k]=map[k]||{c:0,n:0}; map[k].c+=r.totaalCent||0; map[k].n++ }
   return Object.entries(map).sort((a,b)=>b[1].c-a[1].c) }
 function personColor(n){ let h=0; for(const ch of n.toLowerCase()) h=(h*37+ch.charCodeAt(0))%8; return `var(--c${h+1})` }
-function settle(rows){ // gelijk verdelen: minimale overboekingen
-  if(rows.length<2) return []; const total=rows.reduce((a,[,o])=>a+o.c,0); const share=total/rows.length;
-  const deb=[],cred=[]; for(const [n,o] of rows){ const d=Math.round(o.c-share); if(d<0) deb.push([n,-d]); else if(d>0) cred.push([n,d]) }
-  const out=[]; let i=0,j=0; while(i<deb.length&&j<cred.length){ const amt=Math.min(deb[i][1],cred[j][1]); if(amt>=50) out.push([deb[i][0],cred[j][0],amt]);
-    deb[i][1]-=amt; cred[j][1]-=amt; if(deb[i][1]<1) i++; if(cred[j][1]<1) j++ } return out }
-function personCard(list,total){
-  const rows=byPerson(list); if(!rows.length) return "";
-  const max=Math.max(...rows.map(([,o])=>o.c),1); const tr=settle(rows);
-  return `<section class="card"><div class="sechead"><h3>Per persoon</h3><span class="lbl">${esc(ymLabel(st.ym))}</span></div>
-    <div class="people">${rows.map(([n,o])=>`<button class="person" data-person="${esc(n)}">
-      <span class="avatar" style="background:${n==="Onbekend"?"var(--muted)":personColor(n)}">${esc(initials(n))}</span>
-      <span class="pinfo"><span class="pname">${esc(n)}${isMe(n)?' <span class="tag">jij</span>':""}</span>
-        <span class="t"><i style="width:${Math.max(2,o.c/max*100)}%;background:${n==="Onbekend"?"var(--muted)":personColor(n)}"></i></span>
-        <span class="psub">${o.n} bon${o.n===1?"":"nen"} · ${total?Math.round(o.c/total*100):0}%</span></span>
-      <span class="amt">${eur(o.c)}</span></button>`).join("")}</div>
-    ${tr.length?`<div class="settle"><span class="lbl">Gelijk verdelen</span>${tr.map(([a,b,c])=>`<p><b>${esc(a)}</b> betaalt <b class="num">${eur(c)}</b> aan <b>${esc(b)}</b></p>`).join("")}</div>`:(rows.length>1?`<div class="settle"><p>Jullie hebben ongeveer even veel betaald.</p></div>`:"")}
-    ${!st.mijnNaam?`<p class="note">Je hebt nog geen naam ingesteld. <button class="linkbtn" data-act="invite">Naam instellen</button></p>`:""}
-  </section>` }
 const sortRec = (a,b)=>(b.datum||"").localeCompare(a.datum||"")||(b.aangemaakt||"").localeCompare(a.aangemaakt||"");
 
 /* ================= render ================= */
@@ -218,7 +200,7 @@ function renderOverview(){
         <div class="kpi"><span class="lbl">Gem. per bon</span><b>${eur(avg)}</b></div>
         <div class="kpi"><span class="lbl">vs. vorige mnd</span><b>${diff===null?"—":(diff>0?"+":"")+diff+"%"}</b></div>
       </div></section>`;
-  html+=personCard(list,total); if(all().length) html+=rankCard();
+  if(all().length) html+=rankCard();
   if(!all().length){
     html+=`<div class="empty">
       <svg width="54" height="62" viewBox="0 0 30 34" aria-hidden="true"><path d="M3 2h24v28l-3-2.4-3 2.4-3-2.4-3 2.4-3-2.4-3 2.4-3-2.4L3 32z" fill="none" stroke="var(--muted)" stroke-width="1.4"/><path d="M8 9h14M8 14h10M8 19h14" stroke="var(--muted)" stroke-width="1.4" stroke-linecap="round"/></svg>
@@ -249,7 +231,7 @@ function renderList(){
   if(st.person&&!ppl.includes(st.person)) st.person="";
   if(st.person) list=list.filter(r=>payer(r)===st.person);
   let html=`<input class="search" id="q" type="search" placeholder="Zoek op winkel of product…" value="${esc(st.query)}" aria-label="Zoeken">`;
-  if(ppl.length>1) html+=`<div class="chips" role="group" aria-label="Betaald door"><button class="chip" data-person-filter="" aria-pressed="${!st.person}">Iedereen</button>${ppl.map(n=>`<button class="chip" data-person-filter="${esc(n)}" aria-pressed="${st.person===n}">${esc(n)}</button>`).join("")}</div>`;
+  if(ppl.length>1) html+=`<div class="chips" role="group" aria-label="Ingevoerd door"><button class="chip" data-person-filter="" aria-pressed="${!st.person}">Iedereen</button>${ppl.map(n=>`<button class="chip" data-person-filter="${esc(n)}" aria-pressed="${st.person===n}">${esc(n)}</button>`).join("")}</div>`;
   if(st.person&&list.length) html+=`<p class="note">${esc(st.person)} betaalde ${list.length} bon${list.length===1?"":"nen"}, samen <b class="num">${eur(list.reduce((a,r)=>a+r.totaalCent,0))}</b>.</p>`;
   if(!list.length) html+=`<div class="empty"><h3>${q?"Niets gevonden":"Geen bonnen in "+ymLabel(st.ym)}</h3><p>${q?"Probeer een andere zoekterm.":"Scan een bon of voer er een handmatig in."}</p></div>`;
   else { const groups={}; for(const r of list) (groups[r.datum]=groups[r.datum]||[]).push(r);
@@ -271,11 +253,9 @@ function renderAnalyse(){
   const prods=Object.entries(pm).sort((a,b)=>b[1].c-a[1].c).slice(0,8);
   const kort=-(cats.find(c=>c[0]==="Korting")?.[1]||0);
   const nonzero=totals.filter(Boolean);
-  const people={}; for(const [n,o] of byPerson(list)) people[n]=o.c;
   let html=`<section class="card"><div class="sechead"><h3>Laatste 6 maanden</h3><span class="lbl num">gem. ${eur(nonzero.length?Math.round(nonzero.reduce((a,b)=>a+b,0)/nonzero.length):0)}</span></div>${trend}</section>`;
   html+=`<section class="card"><div class="sechead"><h3>Per categorie</h3>${kort>0?`<span class="pill">${eur(kort)} korting</span>`:""}</div>${cats.length?catBars(cats):'<p class="note">Geen bonnen in deze maand.</p>'}</section>`;
   html+=`<section class="card"><h3>Per winkel</h3>${stores.length?`<div class="stores">${stores.map(([n,o])=>`<div class="r"><span class="store" style="background:${storeColor(n)}">${esc(initials(n))}</span><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(n)}</span><span class="c">${o.n}×</span><span class="num">${eur(o.c)}</span></div>`).join("")}</div>`:'<p class="note">Nog geen winkels deze maand.</p>'}</section>`;
-  if(Object.keys(people).length>1) html+=`<section class="card"><h3>Betaald per persoon</h3><div class="toplist">${Object.entries(people).sort((a,b)=>b[1]-a[1]).map(([n,c])=>`<div class="r"><span>${esc(n)}</span><span></span><span class="num">${eur(c)}</span></div>`).join("")}</div></section>`;
   html+=`<section class="card"><h3>Grootste posten</h3>${prods.length?`<div class="toplist">${prods.map(([n,o])=>`<div class="r"><span>${esc(n)}</span><span class="note num">${o.n}×</span><span class="num">${eur(o.c)}</span></div>`).join("")}</div>`:'<p class="note">Scan bonnen met productregels om dit te zien.</p>'}</section>`;
   $("view").innerHTML=html;
 }
