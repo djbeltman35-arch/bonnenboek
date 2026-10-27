@@ -10,18 +10,21 @@ export default async (req: Request) => {
   if (!Netlify.env.get("ANTHROPIC_API_KEY") && !Netlify.env.get("ANTHROPIC_BASE_URL"))
     return fout("Automatisch uitlezen is nog niet actief op deze site.", 503);
 
-  const images: string[] = (Array.isArray(body.images) ? body.images : []).slice(0, 4);
-  const blocks = images
-    .map((d) => /^data:(image\/(?:jpeg|png|webp));base64,(.+)$/.exec(String(d)))
-    .filter(Boolean)
-    .map((m) => ({
-      type: "image" as const,
-      source: { type: "base64" as const, media_type: m![1] as "image/jpeg", data: m![2] },
-    }));
-  if (!blocks.length) return fout("Geen foto ontvangen.");
+  const files: string[] = (Array.isArray(body.images) ? body.images : []).slice(0, 4);
+  const blocks: any[] = [];
+  for (const d of files) {
+    const m = /^data:(image\/(?:jpeg|png|webp|gif)|application\/pdf);base64,(.+)$/.exec(String(d));
+    if (!m) continue;
+    if (m[1] === "application/pdf")
+      blocks.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: m[2] } });
+    else blocks.push({ type: "image", source: { type: "base64", media_type: m[1], data: m[2] } });
+  }
+  const pasted = String(body.text ?? "").slice(0, 30000).trim();
+  if (pasted) blocks.push({ type: "text", text: "Tekst van de bon (geplakt door de gebruiker):\n\n" + pasted });
+  if (!blocks.length) return fout("Geen bon ontvangen.");
 
   const vandaag = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Amsterdam" });
-  const prompt = `Je ziet ${blocks.length > 1 ? blocks.length + " foto's van één lange" : "een foto van een"} kassabon (meestal Nederlands, Belgisch of Duits). Lees de bon zorgvuldig uit.
+  const prompt = `Hierboven staat één kassabon (meestal Nederlands, Belgisch of Duits): een foto van een papieren bon, een schermafbeelding of PDF van een digitale bon uit de app of e-mail van de winkel, of geplakte tekst. Meerdere delen horen samen bij dezelfde bon. Lees de bon zorgvuldig uit.
 Geef ALLEEN een JSON-object terug, zonder uitleg of codeblok, in exact dit formaat:
 {"isBon":true,"winkel":"Albert Heijn","datum":"2026-10-25","totaal":34.56,"betaalwijze":"pin","items":[{"naam":"Halfvolle melk 1L","aantal":2,"prijs":2.38,"categorie":"Zuivel & eieren"}]}
 Regels:
@@ -33,7 +36,7 @@ Regels:
 - Geen regels voor subtotaal, totaal, btw, wisselgeld, betaling of spaarpunten.
 - "categorie" is precies één van: ${CATS.join(" | ")}.
 - "betaalwijze": "pin", "contant", "creditcard", "anders" of null.
-- Is het geen kassabon: {"isBon":false}.`;
+- Is het geen kassabon of aankoopbon: {"isBon":false}.`;
 
   try {
     const anthropic = new Anthropic({ timeout: 55_000, maxRetries: 0 });

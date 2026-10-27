@@ -237,7 +237,7 @@ function openSheet(html,onMount){ lastFocus=lastFocus||document.activeElement;
   const sh=$("sheetRoot").querySelector(".sheet"); onMount&&onMount(sh);
   const x=sh.querySelector("[data-x]"); if(x&&!x.onclick) x.onclick=closeSheet;
   sh.scrollTop=0 }
-function closeSheet(){ $("sheetRoot").innerHTML=""; scanQueue=[]; if(lastFocus&&lastFocus.focus) lastFocus.focus(); lastFocus=null }
+function closeSheet(){ $("sheetRoot").innerHTML=""; scanQueue=[]; picked=[]; if(lastFocus&&lastFocus.focus) lastFocus.focus(); lastFocus=null }
 $("sheetRoot").addEventListener("click",e=>{ if(e.target.hasAttribute&&e.target.hasAttribute("data-close-bg")) closeSheet() });
 document.addEventListener("keydown",e=>{ if(e.key==="Escape"&&sheetBusy()) closeSheet() });
 const head = t => `<header><h2>${esc(t)}</h2><button class="iconbtn" data-x aria-label="Sluiten">✕</button></header>`;
@@ -346,29 +346,56 @@ async function installFlow(){
 
 /* ================= scanning ================= */
 let scanQueue=[], scanTotal=0, picked=[];
+const isPdf = f => f && (f.type==="application/pdf"||/\.pdf$/i.test(f.name||""));
+const isImg = f => f && (f.type.startsWith("image/")||/\.(heic|heif|jpe?g|png|webp)$/i.test(f.name||""));
+function thumb(f){
+  if(f.text!==undefined) return `<span class="doc"><b>TEKST</b><small>${esc(f.text.slice(0,40))}…</small></span>`;
+  if(isPdf(f)) return `<span class="doc"><b>PDF</b><small>${esc(f.name||"bon.pdf")}</small></span>`;
+  return `<img src="${URL.createObjectURL(f)}" alt="Gekozen bon">`;
+}
 function scanSheet(){
-  picked=[];
-  const draw=()=>{ const sh=$("sheetRoot").querySelector(".sheet"); if(!sh) return;
-    sh.querySelector("#pv").innerHTML=picked.map(p=>`<img src="${p.url}" alt="Gekozen foto">`).join("");
-    sh.querySelector("#pickInfo").textContent=picked.length?`${picked.length} foto${picked.length>1?"'s":""} gekozen`:"Nog geen foto";
-    sh.querySelector("#oneWrap").hidden=picked.length<2; sh.querySelector("[data-go]").disabled=!picked.length;
-    sh.querySelector("[data-cam]").textContent=picked.length?"Nog een foto":"Foto maken" };
+  picked=picked||[];
+  const draw=()=>{ const sh=$("sheetRoot").querySelector(".sheet"); if(!sh||!sh.querySelector("#pv")) return;
+    sh.querySelector("#pv").innerHTML=picked.map(thumb).join("");
+    const n=picked.length; sh.querySelector("#pickInfo").textContent=n?`${n} bestand${n>1?"en":""} gekozen`:"Nog niets gekozen";
+    sh.querySelector("#oneWrap").hidden=n<2; sh.querySelector("[data-go]").disabled=!n;
+    sh.querySelector("[data-cam]").textContent=n?"Nog een foto":"Foto maken" };
   scanSheet.draw=draw;
-  openSheet(`${head("Bon scannen")}
-    <p class="note">Leg de bon plat, met goed licht, en zorg dat de hele bon in beeld is. Een lange bon kun je in delen fotograferen.</p>
+  openSheet(`${head("Bon toevoegen")}
+    <p class="note">Fotografeer een papieren bon, of kies een digitale bon: een schermafbeelding uit de app van de winkel of een PDF.</p>
     <div class="preview" id="pv"></div>
     <p class="lbl" id="pickInfo"></p>
-    <div class="actions"><button class="btn primary" data-cam>Foto maken</button><button class="btn ghost" data-gal>Uit galerij</button></div>
-    <label class="toggle" id="oneWrap" hidden><input type="checkbox" id="oneBon"> Alle foto's zijn delen van één bon</label>
+    <div class="actions"><button class="btn primary" data-cam>Foto maken</button><button class="btn ghost" data-gal>Digitale bon of foto kiezen</button></div>
+    <button class="linkbtn" data-text style="align-self:flex-start">Tekst van een e-mailbon plakken</button>
+    <label class="toggle" id="oneWrap" hidden><input type="checkbox" id="oneBon"> Alles hoort bij één bon</label>
     <button class="btn primary" data-go disabled>Uitlezen</button>`,
-  sh=>{ sh.querySelector("[data-cam]").onclick=()=>$("fileCam").click(); sh.querySelector("[data-gal]").onclick=()=>$("fileGal").click();
-    sh.querySelector("[data-go]").onclick=()=>{ const one=sh.querySelector("#oneBon").checked; const files=picked.map(p=>p.file);
+  sh=>{ sh.querySelector("[data-x]").onclick=()=>{ picked=[]; closeSheet() };
+    sh.querySelector("[data-cam]").onclick=()=>$("fileCam").click(); sh.querySelector("[data-gal]").onclick=()=>$("fileGal").click();
+    sh.querySelector("[data-text]").onclick=textSheet;
+    sh.querySelector("[data-go]").onclick=()=>{ const one=sh.querySelector("#oneBon").checked; const files=picked; picked=[];
       runQueue(one||files.length===1?[files]:files.map(f=>[f])) }; draw() });
 }
-function addFiles(list){ for(const f of list) if(f.type.startsWith("image/")||/\.(heic|heif|jpe?g|png|webp)$/i.test(f.name)) picked.push({file:f,url:URL.createObjectURL(f)}); scanSheet.draw&&scanSheet.draw() }
+function textSheet(){
+  openSheet(`${head("Tekst plakken")}
+    <p class="note">Open de e-mail of de bon in de app van de winkel, selecteer alle tekst, kopieer en plak hem hieronder.</p>
+    <textarea id="tIn" class="inp mono" style="min-height:220px;font-size:13px" placeholder="Plak hier de tekst van de bon"></textarea>
+    <div class="actions"><button class="btn primary" data-go>Uitlezen</button><button class="btn ghost" data-back>Terug</button></div>`,
+  sh=>{ sh.querySelector("[data-back]").onclick=scanSheet;
+    sh.querySelector("[data-go]").onclick=()=>{ const t=sh.querySelector("#tIn").value.trim(); if(t.length<10){ toast("Plak eerst de tekst van de bon"); return } runQueue([[{text:t.slice(0,30000)}]]) };
+  });
+}
+function addFiles(list){ let skipped=0; for(const f of list){ if(isImg(f)||isPdf(f)) picked.push(f); else skipped++ }
+  if(skipped) toast("Alleen foto's, schermafbeeldingen en PDF's kunnen worden uitgelezen");
+  if(!$("sheetRoot").querySelector("#pv")) scanSheet(); else scanSheet.draw() }
 $("fileCam").onchange=e=>{ addFiles(e.target.files); e.target.value="" };
 $("fileGal").onchange=e=>{ addFiles(e.target.files); e.target.value="" };
 
+function readDataUrl(f){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=()=>rej(new Error("decode")); r.readAsDataURL(f) }) }
+async function prepare(item){
+  if(item.text!==undefined) return {text:item.text};
+  if(isPdf(item)){ if(item.size>4e6) throw new Error("Deze PDF is te groot (meer dan 4 MB). Maak een schermafbeelding van de bon."); const d=await readDataUrl(item); return {file:d.replace(/^data:[^;]*;/,"data:application/pdf;")} }
+  return {file:await compress(item)};
+}
 async function compress(file){
   const img=await new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=()=>rej(new Error("decode")); i.src=URL.createObjectURL(file) });
   const maxLong=2000, maxPx=3.2e6; let w=img.naturalWidth, h=img.naturalHeight;
@@ -381,19 +408,20 @@ function runQueue(groups){ scanQueue=groups.slice(); scanTotal=groups.length; ne
 async function nextInQueue(){
   const grp=scanQueue.shift(); if(!grp){ closeSheet(); return }
   const idx=scanTotal-scanQueue.length; const label=scanTotal>1?`Bon ${idx} van ${scanTotal}`:"";
-  const urls=grp.map(f=>URL.createObjectURL(f)); let cancelled=false;
+  let cancelled=false;
   openSheet(`<div class="scanning"><div class="roll" aria-hidden="true"></div><h2>Bon uitlezen…</h2>
     <p class="note">${label?esc(label)+" · ":""}Winkel, datum en producten worden herkend. Dit duurt meestal 10 tot 30 seconden.</p>
-    <div class="preview" style="justify-content:center">${urls.map(u=>`<img src="${u}" alt="Bon">`).join("")}</div>
+    <div class="preview" style="justify-content:center">${grp.map(thumb).join("")}</div>
     <div class="actions"><button class="btn ghost" data-stop>Stoppen</button></div></div>`,
   sh=>{ sh.querySelector("[data-stop]").onclick=()=>{ cancelled=true; closeSheet() } });
   const info=scanQueue.length?`${label} · daarna nog ${scanQueue.length}`:label;
   try{
     if(!navigator.onLine) throw Object.assign(new Error("offline"),{status:0});
-    const images=await Promise.all(grp.map(compress));
-    const res=await api("POST","/api/scan",{code:st.code,images},70000);
+    const parts=await Promise.all(grp.map(prepare));
+    const images=parts.filter(p=>p.file).map(p=>p.file); const text=parts.filter(p=>p.text).map(p=>p.text).join("\n\n");
+    const res=await api("POST","/api/scan",{code:st.code,images,text},70000);
     if(cancelled) return;
-    if(!res||res.isBon===false){ failSheet("Geen bon herkend","Op deze foto is geen kassabon te zien. Maak een nieuwe foto recht van boven, met de hele bon in beeld en goed licht."); return }
+    if(!res||res.isBon===false){ failSheet("Geen bon herkend","Hierin is geen kassabon te herkennen. Maak een foto recht van boven met de hele bon in beeld, of kies een schermafbeelding of PDF van de digitale bon."); return }
     const items=(Array.isArray(res.items)?res.items:[]).map(i=>({naam:String(i.naam||"").trim(),aantal:Number(i.aantal)||1,cent:parseEur(i.prijs),cat:CATS.includes(i.categorie)?i.categorie:"Overig"}));
     const datum=/^\d{4}-\d{2}-\d{2}$/.test(res.datum||"")?res.datum:today();
     const r={bron:"scan",winkel:String(res.winkel||"").trim(),datum,totaalCent:parseEur(res.totaal),betaalwijze:["pin","contant","creditcard","anders"].includes(res.betaalwijze)?res.betaalwijze:"",items};
@@ -401,12 +429,12 @@ async function nextInQueue(){
     editSheet(r,info);
   }catch(e){
     if(cancelled) return;
-    const msg=e.status===0?"Er is geen internetverbinding. Scannen werkt alleen online; je kunt de bon wel handmatig invoeren.":(e.message==="decode"?"Deze foto kon niet worden geopend. Kies een JPG of PNG.":e.message);
+    const msg=e.status===0?"Er is geen internetverbinding. Scannen werkt alleen online; je kunt de bon wel handmatig invoeren.":(e.message==="decode"?"Dit bestand kon niet worden geopend. Kies een foto, schermafbeelding of PDF.":e.message);
     failSheet("Uitlezen mislukt",msg);
   }
 }
 function failSheet(title,msg){
-  openSheet(`${head(title)}<p class="err">${esc(msg)}</p><div class="actions"><button class="btn primary" data-again>Opnieuw scannen</button><button class="btn ghost" data-man>Handmatig invoeren</button>${scanQueue.length?'<button class="btn ghost" data-next>Volgende foto</button>':""}</div>`,
+  openSheet(`${head(title)}<p class="err">${esc(msg)}</p><div class="actions"><button class="btn primary" data-again>Opnieuw scannen</button><button class="btn ghost" data-man>Handmatig invoeren</button>${scanQueue.length?'<button class="btn ghost" data-next>Volgende bon</button>':""}</div>`,
     sh=>{ sh.querySelector("[data-again]").onclick=()=>{ scanQueue=[]; scanSheet() }; sh.querySelector("[data-man]").onclick=()=>editSheet({bron:"handmatig",items:[]}); const n=sh.querySelector("[data-next]"); if(n) n.onclick=nextInQueue });
 }
 
@@ -463,5 +491,20 @@ if(st.code&&urlCode) history.replaceState(null,"",location.pathname+location.has
 if(st.mijnNaam) $("wNaam").value=st.mijnNaam;
 route();
 if(st.code) sync();
+if(new URLSearchParams(location.search).has("gedeeld")) receiveShared();
+async function receiveShared(){
+  history.replaceState(null,"",location.pathname+location.hash);
+  if(!("caches" in window)) return;
+  try{
+    const cache=await caches.open("bonnenboek-gedeeld"); const files=[]; let text="";
+    for(const req of await cache.keys()){ const res=await cache.match(req); const p=new URL(req.url).pathname;
+      if(p==="/gedeeld/tekst") text=await res.text();
+      else{ const b=await res.blob(); files.push(new File([b],decodeURIComponent(res.headers.get("x-name")||"bon"),{type:b.type||res.headers.get("content-type")||""})) }
+      await cache.delete(req) }
+    if(!st.code){ toast("Maak eerst een huishouden aan of doe mee, en deel de bon daarna opnieuw."); return }
+    if(files.length){ picked=[]; addFiles(files) }
+    else if(text.length>=10){ textSheet(); const t=$("tIn"); if(t) t.value=text }
+  }catch(e){ toast("De gedeelde bon kon niet worden geopend.") }
+}
 if("serviceWorker" in navigator) addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));
 })();

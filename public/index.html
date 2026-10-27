@@ -166,6 +166,9 @@ section.card h3{font-size:17px;font-weight:600}
 .actions .btn.primary{flex:1 1 180px}
 .preview{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
 .preview img{height:120px;width:auto;max-width:none;border-radius:8px;border:1px solid var(--line)}
+.doc{flex:none;width:90px;height:120px;border-radius:8px;border:1px solid var(--line);background:var(--bg);display:flex;flex-direction:column;justify-content:center;align-items:center;gap:6px;padding:8px;text-align:center}
+.doc b{font-family:var(--f-mono);color:var(--accent)}
+.doc small{font-size:10.5px;color:var(--muted);word-break:break-all;line-height:1.25;overflow:hidden;max-height:4em}
 .scanning{display:flex;flex-direction:column;align-items:center;gap:14px;padding:26px 8px;text-align:center}
 .roll{width:64px;height:84px;border-radius:6px;background:var(--bg);border:1px solid var(--line);position:relative;overflow:hidden}
 .roll::before{content:"";position:absolute;left:0;right:0;height:3px;background:var(--accent);box-shadow:0 0 12px var(--accent);animation:scan 1.6s ease-in-out infinite alternate;z-index:1}
@@ -254,12 +257,12 @@ footer.foot{font-size:12.5px;color:var(--muted);text-align:center;padding:8px 0}
 </div>
 <div class="dock"><div class="in">
   <button class="btn ghost" id="manualBtn" aria-label="Bon handmatig invoeren">＋ Handmatig</button>
-  <button class="btn primary" id="scanBtn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M7 12h10"/></svg>Bon scannen</button>
+  <button class="btn primary" id="scanBtn" aria-label="Bon toevoegen"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M7 12h10"/></svg>Bon scannen</button>
 </div></div>
 </div>
 
 <input type="file" id="fileCam" accept="image/*" capture="environment" hidden>
-<input type="file" id="fileGal" accept="image/*" multiple hidden>
+<input type="file" id="fileGal" accept="image/*,application/pdf,.pdf" multiple hidden>
 <div id="sheetRoot"></div>
 <div id="toastRoot"></div>
 
