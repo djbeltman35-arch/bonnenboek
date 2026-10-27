@@ -15,7 +15,7 @@ const st = {
   bonnen: {},          // id -> bon (incl. etag)
   budgetCent: null,
   queue: [],           // pending writes: {t:"put",id} | {t:"del",id} | {t:"budget",c}
-  view: "overzicht", ym: ym(new Date()), query: "",
+  view: "overzicht", ym: ym(new Date()), query: "", person: "",
   sync: "idle",        // idle | busy | ok | off | error
   lastSync: null,
 };
@@ -110,7 +110,7 @@ addEventListener("offline",()=>setSync("off"));
 function putBon(b){
   const clean={...b, items:(b.items||[]).filter(i=>i.naam||i.cent).map(i=>({naam:String(i.naam||"").slice(0,120),aantal:Number(i.aantal)||1,cent:i.cent|0,cat:CATS.includes(i.cat)?i.cat:"Overig"}))};
   delete clean._warn;
-  clean.id=clean.id||uid(); clean.door=clean.door||st.mijnNaam||""; clean.aangemaakt=clean.aangemaakt||new Date().toISOString();
+  clean.id=clean.id||uid(); clean.door=clean.door||st.mijnNaam||""; clean.betaaldDoor=(clean.betaaldDoor||clean.door||"").trim(); clean.aangemaakt=clean.aangemaakt||new Date().toISOString();
   clean._pend=true; st.bonnen[clean.id]=clean;
   st.queue=st.queue.filter(o=>!(o.t==="put"&&o.id===clean.id)); st.queue.push({t:"put",id:clean.id});
   save(); render(); sync(); return clean;
@@ -127,6 +127,31 @@ function byCategory(list){ const map={}; for(const r of list){ const items=r.ite
     const rest=(r.totaalCent||0)-sumItems(items); if(rest) map["Niet ingedeeld"]=(map["Niet ingedeeld"]||0)+rest }
   return Object.entries(map).filter(([,v])=>v!==0).sort((a,b)=>b[1]-a[1]) }
 function byStore(list){ const map={}; for(const r of list){ const k=r.winkel||"Onbekend"; map[k]=map[k]||{c:0,n:0}; map[k].c+=r.totaalCent||0; map[k].n++ } return Object.entries(map).sort((a,b)=>b[1].c-a[1].c) }
+const payer = r => String(r.betaaldDoor||r.door||"").trim()||"Onbekend";
+const isMe = n => !!st.mijnNaam && n.toLowerCase()===st.mijnNaam.toLowerCase();
+function knownPeople(){ const set=new Map(); const add=n=>{ n=String(n||"").trim(); if(n&&!set.has(n.toLowerCase())) set.set(n.toLowerCase(),n) };
+  add(st.mijnNaam); for(const r of all()){ add(r.betaaldDoor); add(r.door) } return [...set.values()] }
+function byPerson(list){ const map={}; for(const r of list){ const k=payer(r); map[k]=map[k]||{c:0,n:0}; map[k].c+=r.totaalCent||0; map[k].n++ }
+  return Object.entries(map).sort((a,b)=>b[1].c-a[1].c) }
+function personColor(n){ let h=0; for(const ch of n.toLowerCase()) h=(h*37+ch.charCodeAt(0))%8; return `var(--c${h+1})` }
+function settle(rows){ // gelijk verdelen: minimale overboekingen
+  if(rows.length<2) return []; const total=rows.reduce((a,[,o])=>a+o.c,0); const share=total/rows.length;
+  const deb=[],cred=[]; for(const [n,o] of rows){ const d=Math.round(o.c-share); if(d<0) deb.push([n,-d]); else if(d>0) cred.push([n,d]) }
+  const out=[]; let i=0,j=0; while(i<deb.length&&j<cred.length){ const amt=Math.min(deb[i][1],cred[j][1]); if(amt>=50) out.push([deb[i][0],cred[j][0],amt]);
+    deb[i][1]-=amt; cred[j][1]-=amt; if(deb[i][1]<1) i++; if(cred[j][1]<1) j++ } return out }
+function personCard(list,total){
+  const rows=byPerson(list); if(!rows.length) return "";
+  const max=Math.max(...rows.map(([,o])=>o.c),1); const tr=settle(rows);
+  return `<section class="card"><div class="sechead"><h3>Per persoon</h3><span class="lbl">${esc(ymLabel(st.ym))}</span></div>
+    <div class="people">${rows.map(([n,o])=>`<button class="person" data-person="${esc(n)}">
+      <span class="avatar" style="background:${n==="Onbekend"?"var(--muted)":personColor(n)}">${esc(initials(n))}</span>
+      <span class="pinfo"><span class="pname">${esc(n)}${isMe(n)?' <span class="tag">jij</span>':""}</span>
+        <span class="t"><i style="width:${Math.max(2,o.c/max*100)}%;background:${n==="Onbekend"?"var(--muted)":personColor(n)}"></i></span>
+        <span class="psub">${o.n} bon${o.n===1?"":"nen"} · ${total?Math.round(o.c/total*100):0}%</span></span>
+      <span class="amt">${eur(o.c)}</span></button>`).join("")}</div>
+    ${tr.length?`<div class="settle"><span class="lbl">Gelijk verdelen</span>${tr.map(([a,b,c])=>`<p><b>${esc(a)}</b> betaalt <b class="num">${eur(c)}</b> aan <b>${esc(b)}</b></p>`).join("")}</div>`:(rows.length>1?`<div class="settle"><p>Jullie hebben ongeveer even veel betaald.</p></div>`:"")}
+    ${!st.mijnNaam?`<p class="note">Je hebt nog geen naam ingesteld. <button class="linkbtn" data-act="invite">Naam instellen</button></p>`:""}
+  </section>` }
 const sortRec = (a,b)=>(b.datum||"").localeCompare(a.datum||"")||(b.aangemaakt||"").localeCompare(a.aangemaakt||"");
 
 /* ================= render ================= */
@@ -174,6 +199,7 @@ function renderOverview(){
         <div class="kpi"><span class="lbl">Gem. per bon</span><b>${eur(avg)}</b></div>
         <div class="kpi"><span class="lbl">vs. vorige mnd</span><b>${diff===null?"—":(diff>0?"+":"")+diff+"%"}</b></div>
       </div></section>`;
+  html+=personCard(list,total);
   if(!all().length){
     html+=`<div class="empty">
       <svg width="54" height="62" viewBox="0 0 30 34" aria-hidden="true"><path d="M3 2h24v28l-3-2.4-3 2.4-3-2.4-3 2.4-3-2.4-3 2.4-3-2.4L3 32z" fill="none" stroke="var(--muted)" stroke-width="1.4"/><path d="M8 9h14M8 14h10M8 19h14" stroke="var(--muted)" stroke-width="1.4" stroke-linecap="round"/></svg>
@@ -194,13 +220,18 @@ function catBars(cats){ const max=Math.max(...cats.map(c=>Math.abs(c[1])),1);
 function slip(r){ const n=(r.items||[]).length;
   return `<button class="slip" data-open="${esc(r.id)}">
     <span class="store" style="background:${storeColor(r.winkel)}">${esc(initials(r.winkel))}</span>
-    <span style="min-width:0;display:flex;flex-direction:column"><span class="nm">${esc(r.winkel)}${r._pend?'<span class="tag pend">nog niet gedeeld</span>':(r.bron==="scan"?'<span class="tag">gescand</span>':"")}</span><span class="who">${n?n+" product"+(n===1?"":"en"):"Alleen totaal"}${r.door?" · "+esc(r.door):""}</span></span>
+    <span style="min-width:0;display:flex;flex-direction:column"><span class="nm">${esc(r.winkel)}${r._pend?'<span class="tag pend">nog niet gedeeld</span>':(r.bron==="scan"?'<span class="tag">gescand</span>':"")}</span><span class="who">${n?n+" product"+(n===1?"":"en"):"Alleen totaal"}${" · "+esc(payer(r))}</span></span>
     <span class="amt">${eur(r.totaalCent)}</span></button>` }
 
 function renderList(){
   let list=monthBonnen().sort(sortRec); const q=st.query.trim().toLowerCase();
   if(q) list=list.filter(r=>(r.winkel||"").toLowerCase().includes(q)||(r.items||[]).some(i=>(i.naam||"").toLowerCase().includes(q)));
+  const ppl=byPerson(monthBonnen()).map(([n])=>n);
+  if(st.person&&!ppl.includes(st.person)) st.person="";
+  if(st.person) list=list.filter(r=>payer(r)===st.person);
   let html=`<input class="search" id="q" type="search" placeholder="Zoek op winkel of product…" value="${esc(st.query)}" aria-label="Zoeken">`;
+  if(ppl.length>1) html+=`<div class="chips" role="group" aria-label="Betaald door"><button class="chip" data-person-filter="" aria-pressed="${!st.person}">Iedereen</button>${ppl.map(n=>`<button class="chip" data-person-filter="${esc(n)}" aria-pressed="${st.person===n}">${esc(n)}</button>`).join("")}</div>`;
+  if(st.person&&list.length) html+=`<p class="note">${esc(st.person)} betaalde ${list.length} bon${list.length===1?"":"nen"}, samen <b class="num">${eur(list.reduce((a,r)=>a+r.totaalCent,0))}</b>.</p>`;
   if(!list.length) html+=`<div class="empty"><h3>${q?"Niets gevonden":"Geen bonnen in "+ymLabel(st.ym)}</h3><p>${q?"Probeer een andere zoekterm.":"Scan een bon of voer er een handmatig in."}</p></div>`;
   else { const groups={}; for(const r of list) (groups[r.datum]=groups[r.datum]||[]).push(r);
     for(const d of Object.keys(groups)){ const tot=groups[d].reduce((a,r)=>a+r.totaalCent,0);
@@ -221,11 +252,11 @@ function renderAnalyse(){
   const prods=Object.entries(pm).sort((a,b)=>b[1].c-a[1].c).slice(0,8);
   const kort=-(cats.find(c=>c[0]==="Korting")?.[1]||0);
   const nonzero=totals.filter(Boolean);
-  const people={}; for(const r of list){ const k=r.door||"Onbekend"; people[k]=(people[k]||0)+(r.totaalCent||0) }
+  const people={}; for(const [n,o] of byPerson(list)) people[n]=o.c;
   let html=`<section class="card"><div class="sechead"><h3>Laatste 6 maanden</h3><span class="lbl num">gem. ${eur(nonzero.length?Math.round(nonzero.reduce((a,b)=>a+b,0)/nonzero.length):0)}</span></div>${trend}</section>`;
   html+=`<section class="card"><div class="sechead"><h3>Per categorie</h3>${kort>0?`<span class="pill">${eur(kort)} korting</span>`:""}</div>${cats.length?catBars(cats):'<p class="note">Geen bonnen in deze maand.</p>'}</section>`;
   html+=`<section class="card"><h3>Per winkel</h3>${stores.length?`<div class="stores">${stores.map(([n,o])=>`<div class="r"><span class="store" style="background:${storeColor(n)}">${esc(initials(n))}</span><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(n)}</span><span class="c">${o.n}×</span><span class="num">${eur(o.c)}</span></div>`).join("")}</div>`:'<p class="note">Nog geen winkels deze maand.</p>'}</section>`;
-  if(Object.keys(people).length>1) html+=`<section class="card"><h3>Wie deed de boodschappen</h3><div class="toplist">${Object.entries(people).sort((a,b)=>b[1]-a[1]).map(([n,c])=>`<div class="r"><span>${esc(n)}</span><span></span><span class="num">${eur(c)}</span></div>`).join("")}</div></section>`;
+  if(Object.keys(people).length>1) html+=`<section class="card"><h3>Betaald per persoon</h3><div class="toplist">${Object.entries(people).sort((a,b)=>b[1]-a[1]).map(([n,c])=>`<div class="r"><span>${esc(n)}</span><span></span><span class="num">${eur(c)}</span></div>`).join("")}</div></section>`;
   html+=`<section class="card"><h3>Grootste posten</h3>${prods.length?`<div class="toplist">${prods.map(([n,o])=>`<div class="r"><span>${esc(n)}</span><span class="note num">${o.n}×</span><span class="num">${eur(o.c)}</span></div>`).join("")}</div>`:'<p class="note">Scan bonnen met productregels om dit te zien.</p>'}</section>`;
   $("view").innerHTML=html;
 }
@@ -245,7 +276,7 @@ const head = t => `<header><h2>${esc(t)}</h2><button class="iconbtn" data-x aria
 function detailSheet(id){
   const r=st.bonnen[id]; if(!r) return; const items=r.items||[]; const rest=r.totaalCent-sumItems(items);
   openSheet(`${head(r.winkel)}
-    <div class="receipt-head"><b>${eur(r.totaalCent)}</b><span class="note">${esc(dayLabel(r.datum))}${r.betaalwijze?" · "+esc(r.betaalwijze):""}${r.door?" · "+esc(r.door):""}</span></div>
+    <div class="receipt-head"><b>${eur(r.totaalCent)}</b><span class="note">${esc(dayLabel(r.datum))}${r.betaalwijze?" · "+esc(r.betaalwijze):""}</span><span class="note">Betaald door <b>${esc(payer(r))}</b>${r.door&&r.door!==payer(r)?" · ingevoerd door "+esc(r.door):""}</span></div>
     ${items.length?`<div class="detail-items">${items.map(i=>`<div class="r"><span>${esc(i.naam)}${i.aantal>1?" ×"+i.aantal:""}<small>${esc(i.cat)}</small></span><span class="num">${eur(i.cent)}</span></div>`).join("")}</div>`:'<p class="note">Voor deze bon is alleen het totaal ingevoerd.</p>'}
     ${items.length&&Math.abs(rest)>1?`<p class="note">Verschil met totaal: <span class="num diff">${eur(rest)}</span></p>`:""}
     <div class="actions" id="dAct"><button class="btn primary" data-edit>Bewerken</button><button class="btn danger" data-del>Verwijderen</button></div>`,
@@ -269,6 +300,8 @@ function editSheet(r,info){
       <label class="field"><span class="lbl">Totaal betaald</span><input id="eTotaal" class="mono" inputmode="decimal" value="${r.totaalCent?centToInput(r.totaalCent):""}" placeholder="0,00"></label>
       <label class="field"><span class="lbl">Betaalwijze</span><select id="eBetaal">${["","pin","contant","creditcard","anders"].map(o=>`<option value="${o}"${o===(r.betaalwijze||"")?" selected":""}>${o||"—"}</option>`).join("")}</select></label>
     </div>
+    <label class="field"><span class="lbl">Betaald door</span><input id="eBetaald" list="peopleList" value="${esc(r.betaaldDoor||r.door||st.mijnNaam||"")}" placeholder="Naam"></label>
+    <datalist id="peopleList">${knownPeople().map(n=>`<option value="${esc(n)}">`).join("")}</datalist>
     <datalist id="storeList">${stores.map(s=>`<option value="${esc(s)}">`).join("")}</datalist>
     <div class="sechead"><span class="lbl">Producten (optioneel)</span><button class="linkbtn" data-add>+ Regel</button></div>
     <div class="items" id="eItems">${r.items.map(itemRow).join("")}</div>
@@ -285,7 +318,7 @@ function editSheet(r,info){
     sh.querySelector("#eItems").addEventListener("click",e=>{ const k=e.target.dataset.rm; if(k!==undefined){ read(); r.items.splice(+k,1); redraw() } });
     const skip=sh.querySelector("[data-skip]"); if(skip) skip.onclick=()=>nextInQueue();
     sh.querySelector("[data-save]").onclick=()=>{ read(); const err=sh.querySelector("#eErr");
-      r.winkel=sh.querySelector("#eWinkel").value.trim(); r.datum=sh.querySelector("#eDatum").value||today(); r.betaalwijze=sh.querySelector("#eBetaal").value;
+      r.winkel=sh.querySelector("#eWinkel").value.trim(); r.datum=sh.querySelector("#eDatum").value||today(); r.betaalwijze=sh.querySelector("#eBetaal").value; r.betaaldDoor=sh.querySelector("#eBetaald").value.trim();
       r.totaalCent=parseEur(sh.querySelector("#eTotaal").value); if(!r.totaalCent&&r.items.length) r.totaalCent=sumItems(r.items);
       if(!r.winkel){ err.hidden=false; err.textContent="Vul de naam van de winkel in."; return }
       if(!r.totaalCent){ err.hidden=false; err.textContent="Vul het totaalbedrag in, bijvoorbeeld 23,45."; return }
@@ -443,9 +476,9 @@ function exportCsv(allMonths){
   const list=(allMonths?all():monthBonnen()).sort((a,b)=>(a.datum||"").localeCompare(b.datum||""));
   if(!list.length){ toast("Geen bonnen om te exporteren"); return }
   const q=v=>`"${String(v??"").replace(/"/g,'""')}"`; const n=c=>((c||0)/100).toFixed(2).replace(".",",");
-  const rows=[["Datum","Winkel","Product","Aantal","Bedrag","Categorie","Bontotaal","Betaalwijze","Ingevoerd door"].join(";")];
-  for(const r of list){ if(!(r.items||[]).length) rows.push([r.datum,q(r.winkel),"","",n(r.totaalCent),"Niet ingedeeld",n(r.totaalCent),r.betaalwijze||"",q(r.door)].join(";"));
-    else for(const i of r.items) rows.push([r.datum,q(r.winkel),q(i.naam),i.aantal||1,n(i.cent),q(i.cat),n(r.totaalCent),r.betaalwijze||"",q(r.door)].join(";")) }
+  const rows=[["Datum","Winkel","Product","Aantal","Bedrag","Categorie","Bontotaal","Betaalwijze","Betaald door","Ingevoerd door"].join(";")];
+  for(const r of list){ if(!(r.items||[]).length) rows.push([r.datum,q(r.winkel),"","",n(r.totaalCent),"Niet ingedeeld",n(r.totaalCent),r.betaalwijze||"",q(payer(r)),q(r.door)].join(";"));
+    else for(const i of r.items) rows.push([r.datum,q(r.winkel),q(i.naam),i.aantal||1,n(i.cent),q(i.cat),n(r.totaalCent),r.betaalwijze||"",q(payer(r)),q(r.door)].join(";")) }
   const blob=new Blob(["﻿"+rows.join("\r\n")],{type:"text/csv;charset=utf-8"});
   const name=allMonths?"boodschappen-alles.csv":`boodschappen-${st.ym}.csv`;
   const file=new File([blob],name,{type:"text/csv"});
@@ -474,6 +507,8 @@ $("hhBtn").onclick=settingsSheet;
 $("prevM").onclick=()=>{ st.ym=shiftYm(st.ym,-1); render() };
 $("nextM").onclick=()=>{ if(st.ym<ym(new Date())){ st.ym=shiftYm(st.ym,1); render() } };
 $("view").addEventListener("click",e=>{ const o=e.target.closest("[data-open]"); if(o){ detailSheet(o.dataset.open); return }
+  const pr=e.target.closest("[data-person]"); if(pr){ st.person=pr.dataset.person; st.query=""; location.hash="bonnen"; return }
+  const pf=e.target.closest("[data-person-filter]"); if(pf){ st.person=pf.dataset.personFilter; renderList(); return }
   const a=e.target.closest("[data-act]"); if(!a) return; const act=a.dataset.act;
   if(act==="budget") budgetSheet(); else if(act==="scan") scanSheet(); else if(act==="invite") settingsSheet();
   else if(act==="export") exportCsv(false); else if(act==="exportAll") exportCsv(true);
