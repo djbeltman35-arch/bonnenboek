@@ -194,7 +194,7 @@ function verzoekenSheet(){
         <div class="payrow"><span class="lbl">T.n.v.</span><b>${esc(rek.tnv||p.van)}</b></div>
         <div class="payrow"><span class="lbl">Omschrijving</span><b>${esc(oms)}</b><button class="linkbtn" data-copy="${esc(oms)}">kopieer</button></div>
         <p class="note">Open je bankapp, maak het bedrag over en tik daarna op <b>Alles betaald</b>.</p></div>`
-        :`<p class="note">${esc(p.van)} heeft nog geen rekeningnummer ingevuld. Vraag ${esc(p.van)} dit te doen bij de naam van het huishouden &gt; Betaalverzoeken.</p>`)
+        :`<p class="note">Er is nog geen rekeningnummer van ${esc(p.van)}.</p><button class="btn ghost" data-act2="regels">Rekeningnummer invullen</button>`)
         :`<p class="note">${esc(p.aan)} krijgt een melding en ziet dit bedrag als betaalverzoek.</p>`}
       <button class="btn primary" data-paidall="${gi}">Alles betaald${iPay?"":" (ontvangen)"}</button>
     </section>` }).join("");
@@ -206,10 +206,13 @@ function verzoekenSheet(){
     sh.querySelectorAll("[data-paid]").forEach(b=>b.onclick=()=>{ mark([b.dataset.paid],true); toast("Op betaald gezet"); verzoekenSheet() });
     sh.querySelectorAll("[data-undo]").forEach(b=>b.onclick=()=>{ mark([b.dataset.undo],false); verzoekenSheet() });
     sh.querySelectorAll("[data-paidall]").forEach(b=>b.onclick=()=>{ const g=groups[+b.dataset.paidall]; mark(g.items.map(v=>v.bon.id),true); toast(`${eur(g.items.reduce((a,v)=>a+v.cent,0))} verrekend`); verzoekenSheet() });
-    sh.querySelectorAll("[data-copy]").forEach(b=>b.onclick=()=>copy(b.dataset.copy,"Gekopieerd")) });
+    sh.querySelectorAll("[data-copy]").forEach(b=>b.onclick=()=>copy(b.dataset.copy,"Gekopieerd"));
+    sh.querySelectorAll('[data-act2="regels"]').forEach(b=>b.onclick=regelsSheet) });
 }
 function regelsSheet(){
-  const ppl=knownPeople(); const mine=st.mijnNaam?Object.entries(st.rekeningen).find(([n])=>same(n,st.mijnNaam))?.[1]:null;
+  const ppl=knownPeople(); for(const g of st.regels){ if(!ppl.some(n=>same(n,g.van))) ppl.push(g.van); if(!ppl.some(n=>same(n,g.aan))) ppl.push(g.aan) }
+  const rekVan=n=>Object.entries(st.rekeningen).find(([k])=>same(k,n))?.[1];
+  const defWho=(st.regels.find(g=>!rekVan(g.van))||{}).van||st.mijnNaam||""; const cur=rekVan(defWho);
   const pushSupported="Notification" in window&&"PushManager" in window&&"serviceWorker" in navigator;
   const ios=/iphone|ipad|ipod/i.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
   openSheet(`${head("Betaalverzoeken")}
@@ -223,11 +226,15 @@ function regelsSheet(){
       <div class="field" style="justify-content:flex-end"><button class="btn ghost" data-add>Regel toevoegen</button></div>
     </div>
     <p class="note">Gebruik precies dezelfde naam als de persoon in de app heeft ingesteld.</p>
-    <span class="lbl" style="margin-top:6px">Jouw rekening om terugbetaald te worden</span>
-    ${st.mijnNaam?`<div class="grid2">
-      <label class="field"><span class="lbl">IBAN</span><input id="kIban" class="mono" autocapitalize="characters" value="${esc(fmtIban(mine?.iban||""))}" placeholder="NL00 BANK 0123 4567 89"></label>
-      <label class="field"><span class="lbl">Ten name van</span><input id="kTnv" value="${esc(mine?.tnv||"")}" placeholder="${esc(st.mijnNaam)}"></label>
-    </div><button class="btn ghost" data-saverek>Rekening opslaan</button><p class="note">Alleen leden van jullie huishouden zien dit rekeningnummer.</p>`:`<p class="note">Stel eerst je naam in.</p>`}
+    <span class="lbl" style="margin-top:6px">Rekeningnummers om terugbetaald te worden</span>
+    ${Object.keys(st.rekeningen).filter(n=>st.rekeningen[n].iban).length?`<div class="detail-items">${Object.entries(st.rekeningen).filter(([,r])=>r.iban).map(([n,r])=>`<div class="r"><span><b>${esc(n)}</b><small class="mono">${esc(fmtIban(r.iban))} · t.n.v. ${esc(r.tnv||n)}</small></span><button class="linkbtn" data-editrek="${esc(n)}">wijzig</button></div>`).join("")}</div>`:`<p class="note">Nog geen rekeningnummers. Vul het rekeningnummer in van degene die het geld terugkrijgt.</p>`}
+    <div class="grid2">
+      <label class="field"><span class="lbl">Rekening van</span><input id="kWie" list="pplList" value="${esc(defWho)}" placeholder="Bijv. Hilde"></label>
+      <label class="field"><span class="lbl">IBAN</span><input id="kIban" class="mono" autocapitalize="characters" value="${esc(fmtIban(cur?.iban||""))}" placeholder="NL00 BANK 0123 4567 89"></label>
+      <label class="field"><span class="lbl">Ten name van</span><input id="kTnv" value="${esc(cur?.tnv||"")}" placeholder="${esc(defWho||"Naam")}"></label>
+      <div class="field" style="justify-content:flex-end"><button class="btn ghost" data-saverek>Rekening opslaan</button></div>
+    </div>
+    <p class="note">Alleen leden van jullie huishouden zien deze rekeningnummers.</p>
     <span class="lbl" style="margin-top:6px">Meldingen op dit toestel</span>
     ${!pushSupported?`<p class="note">${ios&&!isStandalone()?"Op de iPhone werken meldingen alleen als Bonnenboek op je beginscherm staat. Installeer de app en zet meldingen daar aan.":"Dit toestel of deze browser ondersteunt geen meldingen."}</p>`
       :`<p class="note">${st.pushOn&&Notification.permission==="granted"?"Meldingen staan aan. Je krijgt een melding bij een nieuw betaalverzoek.":"Krijg een melding als er een betaalverzoek voor je klaarstaat."}</p>
@@ -239,9 +246,15 @@ function regelsSheet(){
       if(!van||!aan) return err("Vul bij beide namen iemand in."); if(same(van,aan)) return err("Kies twee verschillende personen."); if(!(pct>=1&&pct<=100)) return err("Het percentage moet tussen 1 en 100 liggen.");
       if(st.regels.some(g=>same(g.van,van)&&same(g.aan,aan))) return err("Deze regel bestaat al.");
       setInst({regels:[...st.regels,{van,aan,pct,sinds:new Date().toISOString()}]}); toast("Regel toegevoegd"); regelsSheet() };
-    const sr=sh.querySelector("[data-saverek]"); if(sr) sr.onclick=()=>{ const iban=sh.querySelector("#kIban").value.replace(/\s+/g,"").toUpperCase();
+    const wie=sh.querySelector("#kWie"), ib=sh.querySelector("#kIban"), tn=sh.querySelector("#kTnv");
+    const fill=n=>{ const r=rekVan(n); ib.value=fmtIban(r?.iban||""); tn.value=r?.tnv||""; tn.placeholder=n||"Naam" };
+    wie.addEventListener("change",()=>fill(wie.value.trim()));
+    sh.querySelectorAll("[data-editrek]").forEach(b=>b.onclick=()=>{ wie.value=b.dataset.editrek; fill(wie.value); ib.focus() });
+    sh.querySelector("[data-saverek]").onclick=()=>{ const naam=wie.value.trim(); const iban=ib.value.replace(/\s+/g,"").toUpperCase();
+      if(!naam) return err("Vul in van wie de rekening is.");
       if(iban&&!ibanOk(iban)) return err("Dit IBAN klopt niet. Controleer het nummer, bijvoorbeeld NL91 ABNA 0417 1643 00.");
-      setInst({rekeningen:{[st.mijnNaam]:{iban,tnv:sh.querySelector("#kTnv").value.trim()||st.mijnNaam}}}); toast("Rekening opgeslagen") };
+      const key=Object.keys(st.rekeningen).find(k=>same(k,naam))||naam;
+      setInst({rekeningen:{[key]:{iban,tnv:tn.value.trim()||naam}}}); toast(`Rekening van ${naam} opgeslagen`); regelsSheet() };
     const pb=sh.querySelector("[data-push]"); if(pb) pb.onclick=async()=>{ pb.disabled=true; try{ await enablePush(); toast("Testmelding verstuurd"); regelsSheet() }catch(e){ err(e.message) } finally{ pb.disabled=false } } });
 }
 function b64u(s){ s=s.replace(/-/g,"+").replace(/_/g,"/"); const raw=atob(s+"=".repeat((4-s.length%4)%4)); return Uint8Array.from(raw,c=>c.charCodeAt(0)) }
