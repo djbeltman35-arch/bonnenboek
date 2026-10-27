@@ -12,19 +12,28 @@ export function vapidReady() {
 
 /** Stuurt een melding naar alle toestellen van een persoon in het huishouden. */
 export async function meldPersoon(code: string, naam: string, payload: object) {
-  if (!vapidReady()) return;
+  const res = { toestellen: 0, verstuurd: 0, fouten: [] as string[], namen: [] as string[] };
+  if (!vapidReady()) { res.fouten.push("geen VAPID-sleutels"); console.error("push: geen VAPID-sleutels"); return res; }
   const s = store();
   const { blobs } = await s.list({ prefix: `hh/${code}/push/` });
   await Promise.all(blobs.map(async (b) => {
-    const rec = (await s.get(b.key, { type: "json" })) as any;
-    if (!rec?.sub || String(rec.naam).toLowerCase() !== naam.toLowerCase()) return;
+    const rec = (await s.get(b.key, { type: "json", consistency: "strong" })) as any;
+    if (!rec?.sub) return;
+    res.namen.push(String(rec.naam));
+    if (String(rec.naam).trim().toLowerCase() !== naam.trim().toLowerCase()) return;
+    res.toestellen++;
     try {
-      await webpush.sendNotification(rec.sub, JSON.stringify(payload), { TTL: 60 * 60 * 24 });
+      const r = await webpush.sendNotification(rec.sub, JSON.stringify(payload), { TTL: 60 * 60 * 24, urgency: "high" });
+      res.verstuurd++;
+      console.log("push verstuurd", r?.statusCode, new URL(rec.sub.endpoint).host);
     } catch (e: any) {
+      res.fouten.push(`${e?.statusCode ?? "?"} ${String(e?.body ?? e?.message ?? "").slice(0, 120)}`);
+      console.error("push mislukt", e?.statusCode, e?.body ?? e?.message);
       if (e?.statusCode === 404 || e?.statusCode === 410) await s.delete(b.key); // abonnement verlopen
-      else console.error("push mislukt", e?.statusCode, e?.body);
     }
   }));
+  console.log("push resultaat", JSON.stringify({ naam, ...res }));
+  return res;
 }
 
 /** Als een nieuwe bon onder een betaalregel valt, krijgt de betaler een melding. */

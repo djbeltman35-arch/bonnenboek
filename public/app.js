@@ -255,7 +255,7 @@ function regelsSheet(){
       if(iban&&!ibanOk(iban)) return err("Dit IBAN klopt niet. Controleer het nummer, bijvoorbeeld NL91 ABNA 0417 1643 00.");
       const key=Object.keys(st.rekeningen).find(k=>same(k,naam))||naam;
       setInst({rekeningen:{[key]:{iban,tnv:tn.value.trim()||naam}}}); toast(`Rekening van ${naam} opgeslagen`); regelsSheet() };
-    const pb=sh.querySelector("[data-push]"); if(pb) pb.onclick=async()=>{ pb.disabled=true; try{ await enablePush(); toast("Testmelding verstuurd"); regelsSheet() }catch(e){ err(e.message) } finally{ pb.disabled=false } } });
+    const pb=sh.querySelector("[data-push]"); if(pb) pb.onclick=async()=>{ pb.disabled=true; try{ const r=await enablePush(); toast(`Testmelding verstuurd naar ${r.verstuurd} toestel${r.verstuurd===1?"":"len"}`); regelsSheet() }catch(e){ err(e.message) } finally{ pb.disabled=false } } });
 }
 function b64u(s){ s=s.replace(/-/g,"+").replace(/_/g,"/"); const raw=atob(s+"=".repeat((4-s.length%4)%4)); return Uint8Array.from(raw,c=>c.charCodeAt(0)) }
 async function enablePush(silent){
@@ -265,7 +265,11 @@ async function enablePush(silent){
   const reg=await navigator.serviceWorker.ready; const {publicKey}=await api("GET","/api/push");
   let sub=await reg.pushManager.getSubscription(); if(!sub) sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64u(publicKey)});
   await api("POST","/api/push",{code:st.code,naam:st.mijnNaam,sub:sub.toJSON()});
-  st.pushOn=true; save(); if(!silent) await api("PUT","/api/push",{code:st.code,naam:st.mijnNaam});
+  st.pushOn=true; save();
+  if(!silent){ const r=await api("PUT","/api/push",{code:st.code,naam:st.mijnNaam});
+    if(r.fouten&&r.fouten.length) throw new Error("Versturen mislukt: "+r.fouten.join("; "));
+    if(!r.toestellen) throw new Error(`Geen toestel gevonden voor "${st.mijnNaam}". Bekend: ${(r.namen||[]).join(", ")||"geen"}.`);
+    return r }
 }
 const sortRec = (a,b)=>(b.datum||"").localeCompare(a.datum||"")||(b.aangemaakt||"").localeCompare(a.aangemaakt||"");
 

@@ -34,8 +34,8 @@ export default async (req: Request) => {
     return json({ ok: true });
   }
   if (req.method === "PUT") {
-    await meldPersoon(code!, String(body.naam ?? ""), { title: "Bonnenboek", body: "Meldingen staan aan op dit toestel.", url: "/#overzicht" });
-    return json({ ok: true });
+    const r = await meldPersoon(code!, String(body.naam ?? ""), { title: "Bonnenboek", body: "Meldingen staan aan op dit toestel.", url: "/#overzicht" });
+    return json(r);
   }
   return fout("Methode niet toegestaan.", 405);
 };
