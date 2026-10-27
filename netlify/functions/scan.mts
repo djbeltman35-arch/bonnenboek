@@ -35,7 +35,9 @@ Regels:
 - Kortingen, bonus, actie of "uw voordeel" als aparte regel met NEGATIEVE prijs en categorie "Korting". Statiegeld als regel met categorie "Statiegeld" (ingeleverd statiegeld negatief).
 - Geen regels voor subtotaal, totaal, btw, wisselgeld, betaling of spaarpunten.
 - "categorie" is precies één van: ${CATS.join(" | ")}.
-- "betaalwijze": "pin", "contant", "creditcard", "anders" of null.
+- "betaalwijze": "pin", "contant", "creditcard", "anders" of null. iDEAL, incasso of betalen via een app is "anders".
+- Online boodschappen (zoals Picnic, AH thuisbezorgd, Jumbo bezorgen, Crisp): gebruik de leverdatum als datum, de bezorgdienst als winkel (bijv. "Picnic"), en neem bezorg- of servicekosten op als regel met categorie "Overig".
+- Een bon of factuur kan meerdere pagina's hebben: neem alle producten van alle pagina's mee.
 - Is het geen kassabon of aankoopbon: {"isBon":false}.`;
 
   try {
