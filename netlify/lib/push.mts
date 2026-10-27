@@ -37,7 +37,7 @@ export async function meldPersoon(code: string, naam: string, payload: object) {
 }
 
 /** Als een nieuwe bon onder een betaalregel valt, krijgt de betaler een melding. */
-export async function meldBetaalverzoek(code: string, bon: any) {
+export async function meldBetaalverzoek(code: string, bon: any, id: string) {
   const inst = schoonInstellingen(((await store().get(`hh/${code}/instellingen`, { type: "json" })) as any) ?? {});
   const koper = String(bon.gekochtDoor || bon.door || "").toLowerCase();
   for (const r of inst.regels) {
@@ -47,6 +47,25 @@ export async function meldBetaalverzoek(code: string, bon: any) {
       title: `Betaalverzoek van ${r.van}`,
       body: `${eur(cent)} voor ${bon.winkel} (${bon.datum.split("-").reverse().join("-")})`,
       url: "/#verzoeken",
+      tag: `bon-${id}`,
+    });
+  }
+}
+
+/** Een verwijderde bon: vervang de melding van het betaalverzoek door "vervallen". */
+export async function trekVerzoekIn(code: string, bon: any, id: string) {
+  if (!bon || bon.verrekend) return;
+  const inst = schoonInstellingen(((await store().get(`hh/${code}/instellingen`, { type: "json" })) as any) ?? {});
+  const koper = String(bon.gekochtDoor || bon.door || "").toLowerCase();
+  for (const r of inst.regels) {
+    if (r.van.toLowerCase() !== koper || String(bon.aangemaakt) < r.sinds) continue;
+    const cent = Math.round((bon.totaalCent * r.pct) / 100);
+    await meldPersoon(code, r.aan, {
+      title: "Betaalverzoek vervallen",
+      body: `${r.van} heeft de bon van ${bon.winkel} (${eur(cent)}) verwijderd. Je hoeft hiervoor niets te betalen.`,
+      url: "/#overzicht",
+      tag: `bon-${id}`,
+      vervallen: true,
     });
   }
 }

@@ -1,6 +1,6 @@
 import type { Config, Context } from "@netlify/functions";
 import { store, json, fout, normCode, huishouden, validId, schoonBon, schoonInstellingen } from "../lib/shared.mts";
-import { meldBetaalverzoek } from "../lib/push.mts";
+import { meldBetaalverzoek, trekVerzoekIn } from "../lib/push.mts";
 
 // Gedeelde bonnen van één huishouden. Elke bon is een eigen blob, zodat twee telefoons
 // nooit elkaars wijzigingen overschrijven.
@@ -52,14 +52,16 @@ export default async (req: Request, context: Context) => {
     const bestond = await s.getMetadata(prefix + id);
     const bon = schoonBon(body.bon);
     const { etag } = await s.setJSON(prefix + id, bon);
-    if (!bestond) context.waitUntil(meldBetaalverzoek(code!, bon).catch((e) => console.error("melding mislukt", e)));
+    if (!bestond) context.waitUntil(meldBetaalverzoek(code!, bon, id).catch((e) => console.error("melding mislukt", e)));
     return json({ id, etag });
   }
 
   if (req.method === "DELETE") {
     const id = url.searchParams.get("id");
     if (!validId(id)) return fout("Ongeldige bon.");
+    const oud = await s.get(prefix + id, { type: "json" });
     await s.delete(prefix + id);
+    if (oud) context.waitUntil(trekVerzoekIn(code!, oud, id).catch((e) => console.error("intrekken mislukt", e)));
     return json({ ok: true });
   }
 

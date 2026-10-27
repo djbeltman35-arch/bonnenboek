@@ -1,5 +1,5 @@
 // Bonnenboek service worker: app shell offline, API always live.
-const CACHE = "bonnenboek-v5";
+const CACHE = "bonnenboek-v6";
 const SHARE = "bonnenboek-gedeeld";
 const SHELL = ["/", "/index.html", "/app.js", "/manifest.webmanifest", "/icons/icon.svg", "/icons/icon-192.png", "/icons/apple-touch-icon.png", "/handleiding.html"];
 
@@ -53,12 +53,21 @@ self.addEventListener("fetch", (e) => {
 // Meldingen (betaalverzoeken)
 self.addEventListener("push", (e) => {
   let d = {}; try { d = e.data ? e.data.json() : {}; } catch (_) { d = { body: e.data && e.data.text() }; }
-  e.waitUntil(self.registration.showNotification(d.title || "Bonnenboek", {
-    body: d.body || "", icon: "/icons/icon-192.png", badge: "/icons/icon-192.png", data: { url: d.url || "/" }, tag: d.tag,
-  }));
+  e.waitUntil((async () => {
+    await self.registration.showNotification(d.title || "Bonnenboek", {
+      body: d.body || "", icon: "/icons/icon-192.png", badge: "/icons/icon-192.png",
+      data: { url: d.url || "/", vervallen: !!d.vervallen }, tag: d.tag, renotify: !!d.tag && !d.vervallen, silent: !!d.vervallen,
+    });
+    const open = (await self.registration.getNotifications()).filter((n) => !(n.data && n.data.vervallen));
+    if (self.navigator.setAppBadge) {
+      if (open.length) self.navigator.setAppBadge(open.length).catch(() => {});
+      else self.navigator.clearAppBadge().catch(() => {});
+    }
+  })());
 });
 self.addEventListener("notificationclick", (e) => {
   e.notification.close();
+  if (self.navigator.clearAppBadge) self.navigator.clearAppBadge().catch(() => {});
   const url = (e.notification.data && e.notification.data.url) || "/";
   e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
     for (const c of list) if ("focus" in c) { c.navigate(url).catch(() => {}); return c.focus(); }

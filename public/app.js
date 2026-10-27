@@ -658,6 +658,12 @@ if(st.code&&urlCode) history.replaceState(null,"",location.pathname+location.has
 if(st.mijnNaam) $("wNaam").value=st.mijnNaam;
 route();
 if(st.code) sync();
+async function clearNotifications(){
+  try{ if(navigator.clearAppBadge) await navigator.clearAppBadge() }catch(e){}
+  try{ const reg=await navigator.serviceWorker?.getRegistration(); if(reg) for(const n of await reg.getNotifications()) n.close() }catch(e){}
+}
+clearNotifications();
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") clearNotifications() });
 if(st.code&&st.pushOn&&"Notification" in window&&Notification.permission==="granted") setTimeout(()=>enablePush(true).catch(()=>{}),3000);
 if(new URLSearchParams(location.search).has("gedeeld")) receiveShared();
 async function receiveShared(){
