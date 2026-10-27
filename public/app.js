@@ -136,12 +136,14 @@ function rankCard(){
   const map={}; for(const r of list){ const k=buyer(r); const o=map[k]=map[k]||{c:0,n:0,p:0}; o.c+=r.totaalCent||0; o.n++; o.p+=prodCount(r) }
   const key={bedrag:"c",producten:"p",keer:"n"}[by]; const rows=Object.entries(map).sort((a,b)=>b[1][key]-a[1][key]||b[1].c-a[1].c);
   const perLabel={maand:ymLabel(st.ym),jaar:y,alles:"altijd"}[per];
-  const chip=(grp,v,l,cur)=>`<button class="chip" data-rank-${grp}="${v}" aria-pressed="${cur===v}">${l}</button>`;
+  const opt=(v,l,cur)=>`<option value="${v}"${cur===v?" selected":""}>${l}</option>`;
   const val=o=>by==="producten"?`${o.p} product${o.p===1?"":"en"}`:by==="keer"?`${o.n}× boodschappen`:eur(o.c);
   const sub=o=>by==="bedrag"?`${o.n}× boodschappen · ${o.p} producten`:by==="producten"?`${o.n}× boodschappen · ${eur(o.c)}`:`${o.p} producten · ${eur(o.c)}`;
   return `<section class="card" id="ranglijst"><div class="sechead"><h3>Ranglijst boodschappen doen</h3><span class="lbl">${esc(perLabel)}</span></div>
-    <div class="chips">${chip("period","maand","Deze maand",per)}${chip("period","jaar","Dit jaar",per)}${chip("period","alles","Altijd",per)}</div>
-    <div class="chips"><span class="lbl" style="align-self:center">Op</span>${chip("sort","bedrag","bedrag",by)}${chip("sort","producten","producten",by)}${chip("sort","keer","keer",by)}</div>
+    <div class="selects">
+      <label class="field"><span class="lbl">Periode</span><select id="rankPeriod">${opt("maand","Deze maand",per)}${opt("jaar","Dit jaar",per)}${opt("alles","Altijd",per)}</select></label>
+      <label class="field"><span class="lbl">Rangschikken op</span><select id="rankSort">${opt("bedrag","Bedrag",by)}${opt("producten","Aantal producten",by)}${opt("keer","Aantal keer",by)}</select></label>
+    </div>
     ${rows.length?`<ol class="rank">${rows.map(([n,o],i)=>`<li class="${i<3&&rows.length>1?"top top"+(i+1):""}"><span class="pos">${i+1}</span>
       <span class="avatar" style="background:${n==="Onbekend"?"var(--muted)":personColor(n)}">${esc(initials(n))}</span>
       <span class="pinfo"><span class="pname">${esc(n)}${isMe(n)?' <span class="tag">jij</span>':""}</span><span class="psub">${sub(o)}</span></span>
@@ -506,13 +508,13 @@ $("prevM").onclick=()=>{ st.ym=shiftYm(st.ym,-1); render() };
 $("nextM").onclick=()=>{ if(st.ym<ym(new Date())){ st.ym=shiftYm(st.ym,1); render() } };
 $("view").addEventListener("click",e=>{ const o=e.target.closest("[data-open]"); if(o){ detailSheet(o.dataset.open); return }
   const pr=e.target.closest("[data-person]"); if(pr){ st.person=pr.dataset.person; st.query=""; location.hash="bonnen"; return }
-  const rp=e.target.closest("[data-rank-period]"); if(rp){ st.rankPeriod=rp.dataset.rankPeriod; redrawRank(); return }
-  const rs=e.target.closest("[data-rank-sort]"); if(rs){ st.rankSort=rs.dataset.rankSort; redrawRank(); return }
   const pf=e.target.closest("[data-person-filter]"); if(pf){ st.person=pf.dataset.personFilter; renderList(); return }
   const a=e.target.closest("[data-act]"); if(!a) return; const act=a.dataset.act;
   if(act==="budget") budgetSheet(); else if(act==="scan") scanSheet(); else if(act==="invite") settingsSheet();
   else if(act==="export") exportCsv(false); else if(act==="exportAll") exportCsv(true);
   else if(act==="install") installFlow(); else if(act==="hideInstall"){ try{ localStorage.setItem("bb.hideInstall","1") }catch(e){} render() } });
+$("view").addEventListener("change",e=>{ if(e.target.id==="rankPeriod"){ st.rankPeriod=e.target.value; redrawRank(); $("rankPeriod").focus() }
+  else if(e.target.id==="rankSort"){ st.rankSort=e.target.value; redrawRank(); $("rankSort").focus() } });
 function redrawRank(){ const el=$("ranglijst"); if(el) el.outerHTML=rankCard() }
 const VIEWS=["overzicht","bonnen","analyse"];
 function route(){ const h=location.hash.slice(1); st.view=VIEWS.includes(h)?h:"overzicht"; render(); scrollTo(0,0) }
