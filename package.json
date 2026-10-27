@@ -1,0 +1,10 @@
+{
+  "name": "bonnenboek",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.60.0",
+    "@netlify/blobs": "^10.0.0",
+    "@netlify/functions": "^4.0.0"
+  }
+}
