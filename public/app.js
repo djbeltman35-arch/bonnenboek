@@ -295,7 +295,7 @@ const head = t => `<header><h2>${esc(t)}</h2><button class="iconbtn" data-x aria
 function detailSheet(id){
   const r=st.bonnen[id]; if(!r) return; const items=r.items||[]; const rest=r.totaalCent-sumItems(items);
   openSheet(`${head(r.winkel)}
-    <div class="receipt-head"><b>${eur(r.totaalCent)}</b><span class="note">${esc(dayLabel(r.datum))}${r.betaalwijze?" · "+esc(r.betaalwijze):""}</span><span class="note">Gekocht door <b>${esc(buyer(r))}</b>${buyer(r)!==payer(r)?` · betaald door <b>${esc(payer(r))}</b>`:""}${r.door&&r.door!==buyer(r)&&r.door!==payer(r)?" · ingevoerd door "+esc(r.door):""}</span></div>
+    <div class="receipt-head"><b>${eur(r.totaalCent)}</b><span class="note">${esc(dayLabel(r.datum))}${r.betaalwijze?" · "+esc(r.betaalwijze):""}</span><span class="note">Ingevoerd door <b>${esc(buyer(r))}</b></span></div>
     ${items.length?`<div class="detail-items">${items.map(i=>`<div class="r"><span>${esc(i.naam)}${i.aantal>1?" ×"+i.aantal:""}<small>${esc(i.cat)}</small></span><span class="num">${eur(i.cent)}</span></div>`).join("")}</div>`:'<p class="note">Voor deze bon is alleen het totaal ingevoerd.</p>'}
     ${items.length&&Math.abs(rest)>1?`<p class="note">Verschil met totaal: <span class="num diff">${eur(rest)}</span></p>`:""}
     <div class="actions" id="dAct"><button class="btn primary" data-edit>Bewerken</button><button class="btn danger" data-del>Verwijderen</button></div>`,
@@ -319,11 +319,7 @@ function editSheet(r,info){
       <label class="field"><span class="lbl">Totaal betaald</span><input id="eTotaal" class="mono" inputmode="decimal" value="${r.totaalCent?centToInput(r.totaalCent):""}" placeholder="0,00"></label>
       <label class="field"><span class="lbl">Betaalwijze</span><select id="eBetaal">${["","pin","contant","creditcard","anders"].map(o=>`<option value="${o}"${o===(r.betaalwijze||"")?" selected":""}>${o||"—"}</option>`).join("")}</select></label>
     </div>
-    <div class="grid2">
-      <label class="field"><span class="lbl">Gekocht door</span><input id="eGekocht" list="peopleList" value="${esc(r.gekochtDoor||r.door||st.mijnNaam||"")}" placeholder="Naam"></label>
-      <label class="field"><span class="lbl">Betaald door</span><input id="eBetaald" list="peopleList" value="${esc(r.betaaldDoor||r.door||st.mijnNaam||"")}" placeholder="Naam"></label>
-    </div>
-    <datalist id="peopleList">${knownPeople().map(n=>`<option value="${esc(n)}">`).join("")}</datalist>
+    <p class="note">${r.id?`Ingevoerd door <b>${esc(r.door||"onbekend")}</b>.`:(st.mijnNaam?`Deze bon telt mee voor <b>${esc(st.mijnNaam)}</b>.`:`Stel je naam in (rechtsboven) zodat de bon op jouw naam komt.`)}</p>
     <datalist id="storeList">${stores.map(s=>`<option value="${esc(s)}">`).join("")}</datalist>
     <div class="sechead"><span class="lbl">Producten (optioneel)</span><button class="linkbtn" data-add>+ Regel</button></div>
     <div class="items" id="eItems">${r.items.map(itemRow).join("")}</div>
@@ -336,13 +332,11 @@ function editSheet(r,info){
       sh.querySelector("#eSum").innerHTML=r.items.length?`<span>Som producten <b>${eur(s)}</b></span>${Math.abs(d)>1?`<span class="diff">Verschil met totaal ${eur(d)}</span>`:`<span>Klopt met totaal ✓</span>`}`:`<span>Zonder productregels telt het totaal als "Niet ingedeeld".</span>` };
     const redraw=()=>{ read(); sh.querySelector("#eItems").innerHTML=r.items.map(itemRow).join(""); upd() };
     sh.addEventListener("input",upd); upd();
-    { const g=sh.querySelector("#eGekocht"), b=sh.querySelector("#eBetaald"); let prev=g.value;
-      g.addEventListener("input",()=>{ if(b.value===prev) b.value=g.value; prev=g.value }) }
     sh.querySelector("[data-add]").onclick=()=>{ r.items.push({naam:"",cent:0,cat:"Overig",aantal:1}); redraw(); const els=sh.querySelectorAll(".item input[data-f=naam]"); els[els.length-1].focus() };
     sh.querySelector("#eItems").addEventListener("click",e=>{ const k=e.target.dataset.rm; if(k!==undefined){ read(); r.items.splice(+k,1); redraw() } });
     const skip=sh.querySelector("[data-skip]"); if(skip) skip.onclick=()=>nextInQueue();
     sh.querySelector("[data-save]").onclick=()=>{ read(); const err=sh.querySelector("#eErr");
-      r.winkel=sh.querySelector("#eWinkel").value.trim(); r.datum=sh.querySelector("#eDatum").value||today(); r.betaalwijze=sh.querySelector("#eBetaal").value; r.betaaldDoor=sh.querySelector("#eBetaald").value.trim(); r.gekochtDoor=sh.querySelector("#eGekocht").value.trim();
+      r.winkel=sh.querySelector("#eWinkel").value.trim(); r.datum=sh.querySelector("#eDatum").value||today(); r.betaalwijze=sh.querySelector("#eBetaal").value;
       r.totaalCent=parseEur(sh.querySelector("#eTotaal").value); if(!r.totaalCent&&r.items.length) r.totaalCent=sumItems(r.items);
       if(!r.winkel){ err.hidden=false; err.textContent="Vul de naam van de winkel in."; return }
       if(!r.totaalCent){ err.hidden=false; err.textContent="Vul het totaalbedrag in, bijvoorbeeld 23,45."; return }
