@@ -13,7 +13,7 @@ const POLL_MS = 15000;
 const st = {
   code: null, hhNaam: "", mijnNaam: "",
   bonnen: {},          // id -> bon (incl. etag)
-  budgetCent: null,
+  budgetCent: null, regels: [], rekeningen: {}, pushOn: false,
   queue: [],           // pending writes: {t:"put",id} | {t:"del",id} | {t:"budget",c}
   view: "overzicht", ym: ym(new Date()), query: "", person: "", rankPeriod: "maand", rankSort: "bedrag",
   sync: "idle",        // idle | busy | ok | off | error
@@ -46,8 +46,8 @@ const uid = () => (crypto.randomUUID ? crypto.randomUUID() : (Date.now().toStrin
 const $ = id => document.getElementById(id);
 
 /* ================= persistence ================= */
-function load(){ try{ const j=JSON.parse(localStorage.getItem(LS)||"null"); if(j) Object.assign(st,{code:j.code||null,hhNaam:j.hhNaam||"",mijnNaam:j.mijnNaam||"",bonnen:j.bonnen||{},budgetCent:j.budgetCent??null,queue:j.queue||[],lastSync:j.lastSync||null}) }catch(e){} }
-function save(){ try{ localStorage.setItem(LS,JSON.stringify({code:st.code,hhNaam:st.hhNaam,mijnNaam:st.mijnNaam,bonnen:st.bonnen,budgetCent:st.budgetCent,queue:st.queue,lastSync:st.lastSync})) }catch(e){} }
+function load(){ try{ const j=JSON.parse(localStorage.getItem(LS)||"null"); if(j) Object.assign(st,{code:j.code||null,hhNaam:j.hhNaam||"",mijnNaam:j.mijnNaam||"",bonnen:j.bonnen||{},budgetCent:j.budgetCent??null,regels:j.regels||[],rekeningen:j.rekeningen||{},pushOn:!!j.pushOn,queue:j.queue||[],lastSync:j.lastSync||null}) }catch(e){} }
+function save(){ try{ localStorage.setItem(LS,JSON.stringify({code:st.code,hhNaam:st.hhNaam,mijnNaam:st.mijnNaam,bonnen:st.bonnen,budgetCent:st.budgetCent,regels:st.regels,rekeningen:st.rekeningen,pushOn:st.pushOn,queue:st.queue,lastSync:st.lastSync})) }catch(e){} }
 
 /* ================= api ================= */
 async function api(method, path, body, timeoutMs=20000){
@@ -69,6 +69,7 @@ async function flushQueue(){
     if(op.t==="put"){ const b=st.bonnen[op.id]; if(b){ const {etag}=await api("PUT","/api/bonnen",{code:st.code,bon:strip(b)}); b.etag=etag; delete b._pend } }
     else if(op.t==="del"){ await api("DELETE",`/api/bonnen?code=${encodeURIComponent(st.code)}&id=${encodeURIComponent(op.id)}`) }
     else if(op.t==="budget"){ await api("PATCH","/api/bonnen",{code:st.code,budgetCent:op.c}) }
+    else if(op.t==="inst"){ await api("PATCH","/api/bonnen",{code:st.code,instellingen:op.patch}) }
     st.queue.shift(); save();
   }
 }
@@ -82,6 +83,7 @@ async function sync(){
     const r=await api("GET",`/api/bonnen?code=${encodeURIComponent(st.code)}`);
     st.hhNaam=r.naam||st.hhNaam;
     if(!st.queue.some(o=>o.t==="budget")) st.budgetCent=r.budgetCent;
+    if(!st.queue.some(o=>o.t==="inst")){ st.regels=r.regels||[]; st.rekeningen=r.rekeningen||{} }
     const serverIds=new Set(r.index.map(x=>x.id));
     const pendingIds=new Set(st.queue.filter(o=>o.t==="put").map(o=>o.id));
     for(const id of Object.keys(st.bonnen)) if(!serverIds.has(id)&&!pendingIds.has(id)) delete st.bonnen[id];
@@ -116,6 +118,10 @@ function putBon(b){
   save(); render(); sync(); return clean;
 }
 function delBon(id){ delete st.bonnen[id]; st.queue=st.queue.filter(o=>o.id!==id); st.queue.push({t:"del",id}); save(); render(); sync() }
+function setInst(patch){
+  if(patch.regels) st.regels=patch.regels;
+  if(patch.rekeningen) st.rekeningen={...st.rekeningen,...patch.rekeningen};
+  st.queue.push({t:"inst",patch}); save(); render(); sync() }
 function setBudget(c){ st.budgetCent=c; st.queue=st.queue.filter(o=>o.t!=="budget"); st.queue.push({t:"budget",c}); save(); render(); sync() }
 
 /* ================= data views ================= */
@@ -155,6 +161,99 @@ function knownPeople(){ const set=new Map(); const add=n=>{ n=String(n||"").trim
 function byPerson(list){ const map={}; for(const r of list){ const k=payer(r); map[k]=map[k]||{c:0,n:0}; map[k].c+=r.totaalCent||0; map[k].n++ }
   return Object.entries(map).sort((a,b)=>b[1].c-a[1].c) }
 function personColor(n){ let h=0; for(const ch of n.toLowerCase()) h=(h*37+ch.charCodeAt(0))%8; return `var(--c${h+1})` }
+/* ---------- betaalverzoeken ---------- */
+const same=(a,b)=>String(a||"").trim().toLowerCase()===String(b||"").trim().toLowerCase();
+function verzoeken(){ const out=[];
+  for(const r of all()) for(const g of st.regels){
+    if(!same(buyer(r),g.van)||(r.aangemaakt||"")<g.sinds) continue;
+    out.push({bon:r,van:g.van,aan:g.aan,cent:Math.round((r.totaalCent||0)*g.pct/100),betaald:!!r.verrekend}) }
+  return out.sort((a,b)=>sortRec(a.bon,b.bon)) }
+function pairs(list){ const m=new Map(); for(const v of list){ const k=v.van.toLowerCase()+"→"+v.aan.toLowerCase(); if(!m.has(k)) m.set(k,{van:v.van,aan:v.aan,items:[]}); m.get(k).items.push(v) } return [...m.values()] }
+function requestBanner(){
+  if(!st.mijnNaam||!st.regels.length) return "";
+  const open=verzoeken().filter(v=>!v.betaald); let html="";
+  for(const p of pairs(open)){ const tot=p.items.reduce((a,v)=>a+v.cent,0);
+    if(same(p.aan,st.mijnNaam)) html+=`<button class="reqbanner pay" data-act="verzoeken"><span class="lbl">Betaalverzoek</span><span>Je moet <b>${esc(p.van)}</b> nog <b class="num">${eur(tot)}</b> betalen</span><span class="note">${p.items.length} bon${p.items.length===1?"":"nen"} · tik om te betalen</span></button>`;
+    else if(same(p.van,st.mijnNaam)) html+=`<button class="reqbanner" data-act="verzoeken"><span class="lbl">Openstaand</span><span><b>${esc(p.aan)}</b> moet je nog <b class="num">${eur(tot)}</b> betalen</span><span class="note">${p.items.length} bon${p.items.length===1?"":"nen"}</span></button>` }
+  return html }
+function ibanOk(i){ i=String(i||"").replace(/\s+/g,"").toUpperCase(); if(!/^[A-Z]{2}\d{2}[A-Z0-9]{10,30}$/.test(i)) return false;
+  const r=(i.slice(4)+i.slice(0,4)).replace(/[A-Z]/g,c=>c.charCodeAt(0)-55); let m=0; for(const ch of r) m=(m*10+ +ch)%97; return m===1 }
+const fmtIban = i => String(i||"").replace(/\s+/g,"").replace(/(.{4})/g,"$1 ").trim();
+function verzoekenSheet(){
+  const all_=verzoeken(); const open=all_.filter(v=>!v.betaald); const done=all_.filter(v=>v.betaald).slice(0,8);
+  const groups=pairs(open);
+  const body=groups.map((p,gi)=>{ const tot=p.items.reduce((a,v)=>a+v.cent,0); const rek=Object.entries(st.rekeningen).find(([n])=>same(n,p.van))?.[1];
+    const oms=`Boodschappen ${p.items.length===1?p.items[0].bon.winkel+" "+p.items[0].bon.datum.split("-").reverse().join("-"):p.items.length+" bonnen"}`;
+    const iPay=same(p.aan,st.mijnNaam);
+    return `<section class="reqgroup">
+      <div class="sechead"><h3>${esc(p.aan)} betaalt ${esc(p.van)}</h3><b class="num">${eur(tot)}</b></div>
+      <div class="detail-items">${p.items.map(v=>`<div class="r"><span>${esc(v.bon.winkel)}<small>${esc(dayLabel(v.bon.datum))}${v.cent!==v.bon.totaalCent?` · ${Math.round(v.cent/v.bon.totaalCent*100)}% van ${eur(v.bon.totaalCent)}`:""}</small></span><span style="display:flex;gap:10px;align-items:center"><span class="num">${eur(v.cent)}</span><button class="btn ghost small" data-paid="${esc(v.bon.id)}">Betaald</button></span></div>`).join("")}</div>
+      ${iPay?(rek&&rek.iban?`<div class="paybox">
+        <div class="payrow"><span class="lbl">Bedrag</span><b class="num">${eur(tot)}</b><button class="linkbtn" data-copy="${centToInput(tot)}">kopieer</button></div>
+        <div class="payrow"><span class="lbl">IBAN</span><b class="mono">${esc(fmtIban(rek.iban))}</b><button class="linkbtn" data-copy="${esc(rek.iban)}">kopieer</button></div>
+        <div class="payrow"><span class="lbl">T.n.v.</span><b>${esc(rek.tnv||p.van)}</b></div>
+        <div class="payrow"><span class="lbl">Omschrijving</span><b>${esc(oms)}</b><button class="linkbtn" data-copy="${esc(oms)}">kopieer</button></div>
+        <p class="note">Open je bankapp, maak het bedrag over en tik daarna op <b>Alles betaald</b>.</p></div>`
+        :`<p class="note">${esc(p.van)} heeft nog geen rekeningnummer ingevuld. Vraag ${esc(p.van)} dit te doen bij de naam van het huishouden &gt; Betaalverzoeken.</p>`)
+        :`<p class="note">${esc(p.aan)} krijgt een melding en ziet dit bedrag als betaalverzoek.</p>`}
+      <button class="btn primary" data-paidall="${gi}">Alles betaald${iPay?"":" (ontvangen)"}</button>
+    </section>` }).join("");
+  openSheet(`${head("Betaalverzoeken")}
+    ${groups.length?body:`<div class="empty"><h3>Alles is verrekend</h3><p>Er staan geen betaalverzoeken open.</p></div>`}
+    ${done.length?`<span class="lbl">Laatst verrekend</span><div class="detail-items">${done.map(v=>`<div class="r"><span>${esc(v.bon.winkel)} · ${esc(v.aan)} &gt; ${esc(v.van)}<small>betaald ${esc(new Date(v.bon.verrekend.op).toLocaleDateString("nl-NL",{day:"numeric",month:"short"}))}</small></span><span style="display:flex;gap:10px;align-items:center"><span class="num">${eur(v.cent)}</span><button class="linkbtn" data-undo="${esc(v.bon.id)}">ongedaan</button></span></div>`).join("")}</div>`:""}
+    ${!st.regels.length?`<p class="note">Er zijn nog geen betaalregels. Stel ze in bij de naam van het huishouden &gt; Betaalverzoeken.</p>`:""}`,
+  sh=>{ const mark=(ids,val)=>{ for(const id of ids){ const b=st.bonnen[id]; if(!b) continue; putBon({...JSON.parse(JSON.stringify(b)),verrekend:val?{op:new Date().toISOString(),door:st.mijnNaam}:null}) } };
+    sh.querySelectorAll("[data-paid]").forEach(b=>b.onclick=()=>{ mark([b.dataset.paid],true); toast("Op betaald gezet"); verzoekenSheet() });
+    sh.querySelectorAll("[data-undo]").forEach(b=>b.onclick=()=>{ mark([b.dataset.undo],false); verzoekenSheet() });
+    sh.querySelectorAll("[data-paidall]").forEach(b=>b.onclick=()=>{ const g=groups[+b.dataset.paidall]; mark(g.items.map(v=>v.bon.id),true); toast(`${eur(g.items.reduce((a,v)=>a+v.cent,0))} verrekend`); verzoekenSheet() });
+    sh.querySelectorAll("[data-copy]").forEach(b=>b.onclick=()=>copy(b.dataset.copy,"Gekopieerd")) });
+}
+function regelsSheet(){
+  const ppl=knownPeople(); const mine=st.mijnNaam?Object.entries(st.rekeningen).find(([n])=>same(n,st.mijnNaam))?.[1]:null;
+  const pushSupported="Notification" in window&&"PushManager" in window&&"serviceWorker" in navigator;
+  const ios=/iphone|ipad|ipod/i.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+  openSheet(`${head("Betaalverzoeken")}
+    <p class="note">Leg vast wie wiens boodschappen terugbetaalt. Elke nieuwe bon van die persoon wordt dan automatisch een betaalverzoek.</p>
+    <div class="detail-items">${st.regels.map((g,i)=>`<div class="r"><span>Bonnen van <b>${esc(g.van)}</b> worden betaald door <b>${esc(g.aan)}</b><small>${g.pct}% van het bedrag · vanaf ${esc(new Date(g.sinds).toLocaleDateString("nl-NL",{day:"numeric",month:"long"}))}</small></span><button class="linkbtn" data-rm="${i}" style="color:var(--bad)">verwijder</button></div>`).join("")||'<p class="note">Nog geen regels.</p>'}</div>
+    <datalist id="pplList">${ppl.map(n=>`<option value="${esc(n)}">`).join("")}</datalist>
+    <div class="grid2">
+      <label class="field"><span class="lbl">Bonnen van</span><input id="rVan" list="pplList" placeholder="Bijv. Hilde"></label>
+      <label class="field"><span class="lbl">Betaald door</span><input id="rAan" list="pplList" placeholder="Bijv. Erik"></label>
+      <label class="field"><span class="lbl">Percentage</span><input id="rPct" inputmode="numeric" value="100"></label>
+      <div class="field" style="justify-content:flex-end"><button class="btn ghost" data-add>Regel toevoegen</button></div>
+    </div>
+    <p class="note">Gebruik precies dezelfde naam als de persoon in de app heeft ingesteld.</p>
+    <span class="lbl" style="margin-top:6px">Jouw rekening om terugbetaald te worden</span>
+    ${st.mijnNaam?`<div class="grid2">
+      <label class="field"><span class="lbl">IBAN</span><input id="kIban" class="mono" autocapitalize="characters" value="${esc(fmtIban(mine?.iban||""))}" placeholder="NL00 BANK 0123 4567 89"></label>
+      <label class="field"><span class="lbl">Ten name van</span><input id="kTnv" value="${esc(mine?.tnv||"")}" placeholder="${esc(st.mijnNaam)}"></label>
+    </div><button class="btn ghost" data-saverek>Rekening opslaan</button><p class="note">Alleen leden van jullie huishouden zien dit rekeningnummer.</p>`:`<p class="note">Stel eerst je naam in.</p>`}
+    <span class="lbl" style="margin-top:6px">Meldingen op dit toestel</span>
+    ${!pushSupported?`<p class="note">${ios&&!isStandalone()?"Op de iPhone werken meldingen alleen als Bonnenboek op je beginscherm staat. Installeer de app en zet meldingen daar aan.":"Dit toestel of deze browser ondersteunt geen meldingen."}</p>`
+      :`<p class="note">${st.pushOn&&Notification.permission==="granted"?"Meldingen staan aan. Je krijgt een melding bij een nieuw betaalverzoek.":"Krijg een melding als er een betaalverzoek voor je klaarstaat."}</p>
+      <button class="btn ${st.pushOn&&Notification.permission==="granted"?"ghost":"primary"}" data-push>${st.pushOn&&Notification.permission==="granted"?"Testmelding sturen":"Meldingen aanzetten"}</button>`}
+    <p class="err" id="rErr" hidden></p>`,
+  sh=>{ const err=m=>{ const e=sh.querySelector("#rErr"); e.hidden=false; e.textContent=m };
+    sh.querySelectorAll("[data-rm]").forEach(b=>b.onclick=()=>{ const r=st.regels.slice(); r.splice(+b.dataset.rm,1); setInst({regels:r}); regelsSheet() });
+    sh.querySelector("[data-add]").onclick=()=>{ const van=sh.querySelector("#rVan").value.trim(), aan=sh.querySelector("#rAan").value.trim(), pct=Math.round(+sh.querySelector("#rPct").value.replace(",",".")||100);
+      if(!van||!aan) return err("Vul bij beide namen iemand in."); if(same(van,aan)) return err("Kies twee verschillende personen."); if(!(pct>=1&&pct<=100)) return err("Het percentage moet tussen 1 en 100 liggen.");
+      if(st.regels.some(g=>same(g.van,van)&&same(g.aan,aan))) return err("Deze regel bestaat al.");
+      setInst({regels:[...st.regels,{van,aan,pct,sinds:new Date().toISOString()}]}); toast("Regel toegevoegd"); regelsSheet() };
+    const sr=sh.querySelector("[data-saverek]"); if(sr) sr.onclick=()=>{ const iban=sh.querySelector("#kIban").value.replace(/\s+/g,"").toUpperCase();
+      if(iban&&!ibanOk(iban)) return err("Dit IBAN klopt niet. Controleer het nummer, bijvoorbeeld NL91 ABNA 0417 1643 00.");
+      setInst({rekeningen:{[st.mijnNaam]:{iban,tnv:sh.querySelector("#kTnv").value.trim()||st.mijnNaam}}}); toast("Rekening opgeslagen") };
+    const pb=sh.querySelector("[data-push]"); if(pb) pb.onclick=async()=>{ pb.disabled=true; try{ await enablePush(); toast("Testmelding verstuurd"); regelsSheet() }catch(e){ err(e.message) } finally{ pb.disabled=false } } });
+}
+function b64u(s){ s=s.replace(/-/g,"+").replace(/_/g,"/"); const raw=atob(s+"=".repeat((4-s.length%4)%4)); return Uint8Array.from(raw,c=>c.charCodeAt(0)) }
+async function enablePush(silent){
+  if(!st.mijnNaam) throw new Error("Stel eerst je naam in.");
+  const perm=silent?Notification.permission:await Notification.requestPermission();
+  if(perm!=="granted") throw new Error("Meldingen zijn geweigerd. Zet ze aan in de instellingen van je telefoon bij Bonnenboek.");
+  const reg=await navigator.serviceWorker.ready; const {publicKey}=await api("GET","/api/push");
+  let sub=await reg.pushManager.getSubscription(); if(!sub) sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64u(publicKey)});
+  await api("POST","/api/push",{code:st.code,naam:st.mijnNaam,sub:sub.toJSON()});
+  st.pushOn=true; save(); if(!silent) await api("PUT","/api/push",{code:st.code,naam:st.mijnNaam});
+}
 const sortRec = (a,b)=>(b.datum||"").localeCompare(a.datum||"")||(b.aangemaakt||"").localeCompare(a.aangemaakt||"");
 
 /* ================= render ================= */
@@ -193,7 +292,7 @@ function renderOverview(){
   const list=monthBonnen(); const total=monthTotal(st.ym); const prev=monthTotal(shiftYm(st.ym,-1));
   const cats=byCategory(list).slice(0,6); const avg=list.length?Math.round(total/list.length):0;
   const diff=prev?Math.round((total-prev)/prev*100):null;
-  let html=installBanner()+`<section class="total">
+  let html=requestBanner()+installBanner()+`<section class="total">
       <span class="lbl">Uitgegeven aan boodschappen</span>
       <div class="big">${eur(total)}</div>
       ${budgetBlock(total)}
@@ -323,7 +422,8 @@ function editSheet(r,info){
       if(!r.winkel){ err.hidden=false; err.textContent="Vul de naam van de winkel in."; return }
       if(!r.totaalCent){ err.hidden=false; err.textContent="Vul het totaalbedrag in, bijvoorbeeld 23,45."; return }
       const wasEdit=!!r.id; const saved=putBon(r);
-      toast(wasEdit?"Bon bijgewerkt":"Bon opgeslagen · "+eur(saved.totaalCent));
+      const vz=!wasEdit&&st.regels.find(g=>same(g.van,buyer(saved)));
+      toast(wasEdit?"Bon bijgewerkt":vz?`Bon opgeslagen · betaalverzoek van ${eur(Math.round(saved.totaalCent*vz.pct/100))} naar ${vz.aan}`:"Bon opgeslagen · "+eur(saved.totaalCent));
       if(saved.datum&&!saved.datum.startsWith(st.ym)){ st.ym=saved.datum.slice(0,7); render() }
       if(scanQueue.length) nextInQueue(); else closeSheet() };
   });
@@ -346,16 +446,18 @@ function settingsSheet(){
     <div class="codebox" id="codeBox">${esc(st.code)}</div>
     <p class="note">Iedereen met deze code ziet en bewerkt dezelfde bonnen. Deel hem alleen met je huisgenoten.</p>
     <div class="actions"><button class="btn primary" data-share>Uitnodiging delen</button><button class="btn ghost" data-copy>Link kopiëren</button></div>
+    <button class="btn ghost" data-regels>Betaalverzoeken${st.regels.length?` (${st.regels.length} regel${st.regels.length>1?"s":""})`:""}</button>
     <label class="field"><span class="lbl">Jouw naam (zichtbaar bij je bonnen)</span><input class="inp" id="sNaam" value="${esc(st.mijnNaam)}"></label>
     <p class="note">Laatst bijgewerkt: ${esc(last)}${pend?` · ${pend} wijziging${pend>1?"en":""} wacht${pend>1?"en":""} op verbinding`:""}</p>
     <div class="actions">${isStandalone()?"":`<button class="btn ghost" data-install>App installeren</button>`}<a class="btn ghost" href="/handleiding.html">Handleiding</a></div>
     <button class="linkbtn" data-leave style="align-self:flex-start;color:var(--bad)">Dit toestel loskoppelen van het huishouden</button>`,
   sh=>{ sh.querySelector("[data-share]").onclick=shareInvite;
     sh.querySelector("[data-copy]").onclick=()=>copy(inviteLink(),"Link gekopieerd");
-    sh.querySelector("#sNaam").addEventListener("change",e=>{ st.mijnNaam=e.target.value.trim(); save(); toast("Naam opgeslagen") });
+    sh.querySelector("#sNaam").addEventListener("change",e=>{ st.mijnNaam=e.target.value.trim(); save(); toast("Naam opgeslagen"); if(st.pushOn) enablePush(true).catch(()=>{}) });
+    sh.querySelector("[data-regels]").onclick=regelsSheet;
     const ib=sh.querySelector("[data-install]"); if(ib) ib.onclick=installFlow;
     sh.querySelector("[data-leave]").onclick=()=>{ openSheet(`${head("Loskoppelen?")}<p class="note">De bonnen blijven bewaard voor de anderen. Je kunt later weer meedoen met code <b class="mono">${esc(st.code)}</b>.</p>${st.queue.length?`<p class="err">Let op: ${st.queue.length} wijziging(en) zijn nog niet verstuurd en gaan verloren.</p>`:""}<div class="actions"><button class="btn danger" data-yes>Loskoppelen</button><button class="btn ghost" data-no>Annuleren</button></div>`,
-      s2=>{ s2.querySelector("[data-no]").onclick=settingsSheet; s2.querySelector("[data-yes]").onclick=()=>{ Object.assign(st,{code:null,hhNaam:"",bonnen:{},queue:[],budgetCent:null,lastSync:null}); save(); closeSheet(); render() } }) } });
+      s2=>{ s2.querySelector("[data-no]").onclick=settingsSheet; s2.querySelector("[data-yes]").onclick=()=>{ Object.assign(st,{code:null,hhNaam:"",bonnen:{},queue:[],budgetCent:null,regels:[],rekeningen:{},lastSync:null}); save(); closeSheet(); render() } }) } });
 }
 async function shareInvite(){
   const text=`Doe mee met ons Bonnenboek "${st.hhNaam}" om samen de boodschappen bij te houden. Code: ${st.code}`;
@@ -510,14 +612,15 @@ $("view").addEventListener("click",e=>{ const o=e.target.closest("[data-open]");
   const pr=e.target.closest("[data-person]"); if(pr){ st.person=pr.dataset.person; st.query=""; location.hash="bonnen"; return }
   const pf=e.target.closest("[data-person-filter]"); if(pf){ st.person=pf.dataset.personFilter; renderList(); return }
   const a=e.target.closest("[data-act]"); if(!a) return; const act=a.dataset.act;
-  if(act==="budget") budgetSheet(); else if(act==="scan") scanSheet(); else if(act==="invite") settingsSheet();
+  if(act==="verzoeken") verzoekenSheet(); else if(act==="budget") budgetSheet(); else if(act==="scan") scanSheet(); else if(act==="invite") settingsSheet();
   else if(act==="export") exportCsv(false); else if(act==="exportAll") exportCsv(true);
   else if(act==="install") installFlow(); else if(act==="hideInstall"){ try{ localStorage.setItem("bb.hideInstall","1") }catch(e){} render() } });
 $("view").addEventListener("change",e=>{ if(e.target.id==="rankPeriod"){ st.rankPeriod=e.target.value; redrawRank(); $("rankPeriod").focus() }
   else if(e.target.id==="rankSort"){ st.rankSort=e.target.value; redrawRank(); $("rankSort").focus() } });
 function redrawRank(){ const el=$("ranglijst"); if(el) el.outerHTML=rankCard() }
 const VIEWS=["overzicht","bonnen","analyse"];
-function route(){ const h=location.hash.slice(1); st.view=VIEWS.includes(h)?h:"overzicht"; render(); scrollTo(0,0) }
+function route(){ const h=location.hash.slice(1); st.view=VIEWS.includes(h)?h:"overzicht"; render(); scrollTo(0,0)
+  if(h==="verzoeken"&&st.code){ history.replaceState(null,"",location.pathname+"#overzicht"); verzoekenSheet() } }
 addEventListener("hashchange",route);
 
 /* ================= boot ================= */
@@ -529,6 +632,7 @@ if(st.code&&urlCode) history.replaceState(null,"",location.pathname+location.has
 if(st.mijnNaam) $("wNaam").value=st.mijnNaam;
 route();
 if(st.code) sync();
+if(st.code&&st.pushOn&&"Notification" in window&&Notification.permission==="granted") setTimeout(()=>enablePush(true).catch(()=>{}),3000);
 if(new URLSearchParams(location.search).has("gedeeld")) receiveShared();
 async function receiveShared(){
   history.replaceState(null,"",location.pathname+location.hash);

@@ -65,7 +65,29 @@ export function schoonBon(b: any) {
     door: str(b?.door, 40),
     betaaldDoor: str(b?.betaaldDoor ?? b?.door, 40),
     gekochtDoor: str(b?.gekochtDoor ?? b?.door, 40),
+    verrekend: b?.verrekend && typeof b.verrekend === "object"
+      ? { op: str(b.verrekend.op, 40), door: str(b.verrekend.door, 40) }
+      : null,
     aangemaakt: str(b?.aangemaakt, 40) || new Date().toISOString(),
     gewijzigd: new Date().toISOString(),
   };
+}
+
+/** Household settings: budget, payment-request rules and bank accounts. */
+export function schoonInstellingen(i: any) {
+  const str = (v: unknown, n: number) => String(v ?? "").trim().slice(0, n);
+  const budget = i?.budgetCent === null ? null : Math.max(0, Math.round(Number(i?.budgetCent) || 0)) || null;
+  const regels = (Array.isArray(i?.regels) ? i.regels : []).slice(0, 10)
+    .map((r: any) => ({
+      van: str(r?.van, 40), aan: str(r?.aan, 40),
+      pct: Math.min(100, Math.max(1, Math.round(Number(r?.pct) || 100))),
+      sinds: str(r?.sinds, 40) || new Date().toISOString(),
+    }))
+    .filter((r: any) => r.van && r.aan && r.van.toLowerCase() !== r.aan.toLowerCase());
+  const rekeningen: Record<string, { iban: string; tnv: string }> = {};
+  for (const [naam, r] of Object.entries(i?.rekeningen ?? {}).slice(0, 20) as any) {
+    const n = str(naam, 40); if (!n) continue;
+    rekeningen[n] = { iban: str(r?.iban, 40).toUpperCase().replace(/\s+/g, ""), tnv: str(r?.tnv, 60) };
+  }
+  return { budgetCent: budget, regels, rekeningen };
 }
