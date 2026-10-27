@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Handleiding · Bonnenboek</title>
+<meta name="theme-color" content="#0B6E50">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root{--bg:#EEF2EE;--paper:#FBFCFA;--ink:#17211C;--muted:#5C6B63;--line:#D5DDD7;--accent:#0B6E50;--soft:#D6EBE2;--warnbg:#FFF6DD;--warn:#B26A00;
+  --f-display:"Bricolage Grotesque","Avenir Next","Segoe UI",system-ui,sans-serif;--f-body:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#0F1512;--paper:#18211C;--ink:#E6EEE9;--muted:#97A69E;--line:#2A3630;--accent:#3FBF8F;--soft:#183A2D;--warnbg:#3A2E12;--warn:#E3A13B;color-scheme:dark}}
+*{box-sizing:border-box}
+html{padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.6;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 calc(40px + env(safe-area-inset-bottom,0px))}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.wrap{max-width:680px;margin:0 auto}
+.bar{position:sticky;top:env(safe-area-inset-top,0px);background:var(--bg);display:flex;justify-content:space-between;align-items:center;gap:10px;padding-block:12px;z-index:5;border-bottom:1px solid var(--line)}
+.bar a{color:var(--accent);font-weight:600;text-decoration:none;padding:8px 0}
+h1,h2,h3{font-family:var(--f-display);line-height:1.2;text-wrap:balance;margin:0}
+h1{font-size:32px;font-weight:800;margin:22px 0 6px}
+h2{font-size:22px;margin:34px 0 10px;padding-top:4px}
+h3{font-size:17px;color:var(--accent);margin:20px 0 6px}
+p{margin:0 0 10px}
+ol,ul{margin:0 0 12px;padding-left:22px;display:flex;flex-direction:column;gap:6px}
+li::marker{color:var(--accent);font-weight:600}
+.lead{color:var(--muted)}
+.box{background:var(--soft);border-left:3px solid var(--accent);border-radius:8px;padding:12px 14px;margin:12px 0}
+.box.warn{background:var(--warnbg);border-color:var(--warn)}
+.box b:first-child{display:block}
+nav.toc{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin:16px 0}
+nav.toc ol{margin:6px 0 0}
+nav.toc a{color:var(--ink)}
+.tbl{overflow-x:auto;margin:10px 0 14px}
+table{border-collapse:collapse;width:100%;font-size:15px;background:var(--paper);border-radius:10px;overflow:hidden}
+th,td{text-align:left;vertical-align:top;padding:9px 10px;border-bottom:1px solid var(--line)}
+th{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.btn{display:inline-flex;align-items:center;gap:8px;background:var(--accent);color:var(--paper);padding:12px 16px;border-radius:12px;font-weight:600;text-decoration:none}
+.foot{margin-top:30px;color:var(--muted);font-size:14px}
+a{color:var(--accent)}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px;border-radius:4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="bar"><a href="/#overzicht">‹ Terug naar Bonnenboek</a><a href="/handleiding.pdf" download>PDF</a></div>
+
+  <h1>Handleiding</h1>
+  <p class="lead">Samen de boodschappenuitgaven bijhouden door kassabonnen te scannen.</p>
+
+  <nav class="toc" aria-label="Inhoud"><b>Inhoud</b>
+    <ol>
+      <li><a href="#wat">Wat is Bonnenboek?</a></li>
+      <li><a href="#installeren">De app installeren</a></li>
+      <li><a href="#huishouden">Huishouden aanmaken of meedoen</a></li>
+      <li><a href="#scannen">Een papieren bon scannen</a></li>
+      <li><a href="#digitaal">Digitale bonnen en Picnic</a></li>
+      <li><a href="#controleren">Controleren, bewerken en handmatig invoeren</a></li>
+      <li><a href="#budget">Budget, overzicht en analyse</a></li>
+      <li><a href="#exporteren">Exporteren naar Excel</a></li>
+      <li><a href="#samen">Samen gebruiken en offline</a></li>
+      <li><a href="#problemen">Problemen oplossen</a></li>
+    </ol>
+  </nav>
+
+  <h2 id="wat">1. Wat is Bonnenboek?</h2>
+  <p>Met Bonnenboek houd je samen met je huisgenoten bij wat jullie aan boodschappen uitgeven. Je fotografeert een kassabon of kiest een digitale bon, en de app leest de winkel, de datum, het totaal en alle producten automatisch uit. Elk product wordt ingedeeld in een categorie, zoals <i>Groente &amp; fruit</i> of <i>Zuivel &amp; eieren</i>.</p>
+  <p>Iedereen in het huishouden ziet dezelfde bonnen, hetzelfde budget en dezelfde overzichten, op zijn of haar eigen telefoon.</p>
+
+  <h2 id="installeren">2. De app installeren</h2>
+  <p>Bonnenboek installeer je rechtstreeks vanuit de browser, niet uit de App Store of Play Store.</p>
+  <h3>Android (Chrome)</h3>
+  <ol><li>Open <b>bonnenboek.netlify.app</b> in <b>Chrome</b>.</li><li>Tik rechtsboven op het menu met de <b>drie puntjes</b>.</li><li>Kies <b>App installeren</b> of <b>Toevoegen aan startscherm</b>.</li></ol>
+  <h3>iPhone (Safari)</h3>
+  <ol><li>Open <b>bonnenboek.netlify.app</b> in <b>Safari</b>.</li><li>Tik op de <b>Deel-knop</b> (vierkantje met pijl omhoog). Zie je die niet, tik dan eerst op de <b>drie puntjes</b> naast het adres.</li><li>Kies <b>Zet op beginscherm</b>, laat <i>Open als webapp</i> aan staan en tik op <b>Voeg toe</b>.</li></ol>
+  <div class="box warn"><b>Let op bij de iPhone</b>Een geïnstalleerde app op de iPhone bewaart zijn gegevens apart van Safari. Kies in de geïnstalleerde app <b>Meedoen met een code</b> en vul je code in. Je bonnen staan veilig online.</div>
+
+  <h2 id="huishouden">3. Huishouden aanmaken of meedoen</h2>
+  <h3>Een nieuw huishouden aanmaken</h3>
+  <ol><li>Vul <b>Jouw naam</b> in. Die staat later bij de bonnen die jij invoert.</li><li>Geef het huishouden een naam en tik op <b>Huishouden aanmaken</b>.</li><li>Je krijgt een code van acht tekens, zoals <b>K7QM-4XPA</b>.</li></ol>
+  <h3>Anderen uitnodigen</h3>
+  <ol><li>Tik rechtsboven op de naam van je huishouden.</li><li>Tik op <b>Uitnodiging delen</b> en stuur de link, bijvoorbeeld via WhatsApp.</li><li>Wie de link opent, vult een naam in en zit direct in hetzelfde huishouden. De code overtypen via <b>Meedoen met een code</b> kan ook.</li></ol>
+  <div class="box"><b>Privacy</b>Iedereen met de code kan de bonnen zien en bewerken. Deel hem alleen met je huisgenoten.</div>
+
+  <h2 id="scannen">4. Een papieren bon scannen</h2>
+  <ol><li>Tik onderaan op <b>Bon scannen</b> en dan op <b>Foto maken</b>.</li><li>Is de bon lang, tik dan op <b>Nog een foto</b> voor het volgende stuk.</li><li>Bij meerdere foto's van dezelfde bon vink je <b>Alles hoort bij één bon</b> aan. Anders wordt elke foto een aparte bon.</li><li>Tik op <b>Uitlezen</b>. Na 10 tot 30 seconden controleer je de bon en tik je op <b>Opslaan</b>.</li></ol>
+  <h3>Tips voor een goede foto</h3>
+  <ul><li>Leg de bon plat op een donkere ondergrond, met goed licht en zonder schaduw.</li><li>Houd de telefoon recht boven de bon, met de hele breedte in beeld.</li><li>Fotografeer vervaagde bonnen liever meteen na het boodschappen doen.</li></ul>
+
+  <h2 id="digitaal">5. Digitale bonnen en Picnic</h2>
+  <div class="tbl"><table>
+    <tr><th>Manier</th><th>Hoe werkt het?</th></tr>
+    <tr><td><b>PDF of schermafbeelding</b></td><td><b>Bon scannen</b> › <b>Digitale bon of foto kiezen</b>. Een PDF met meerdere pagina's wordt helemaal uitgelezen.</td></tr>
+    <tr><td><b>Delen naar Bonnenboek</b><br>(alleen Android)</td><td>Tik in de mail-app of winkel-app op <b>Delen</b> en kies <b>Bonnenboek</b>.</td></tr>
+    <tr><td><b>Tekst plakken</b></td><td>Kopieer de tekst van een e-mailbon en kies <b>Tekst van een e-mailbon plakken</b>.</td></tr>
+  </table></div>
+  <div class="box"><b>Delen op de iPhone</b>Apple staat delen naar web-apps niet toe. Bewaar de PDF in <b>Bestanden</b> of maak een schermafbeelding, en kies die via <b>Digitale bon of foto kiezen</b>.</div>
+  <h3>Bonnen van Picnic</h3>
+  <ol><li>Open de e-mail van Picnic na de bezorging en open of download de PDF.</li><li>Deel de PDF naar Bonnenboek (Android) of kies hem via <b>Digitale bon of foto kiezen</b>.</li><li>Geen PDF? Maak schermafbeeldingen van de bestelling in de Picnic-app, kies ze allemaal en vink <b>Alles hoort bij één bon</b> aan.</li></ol>
+  <p>Bonnenboek gebruikt dan de <b>leverdatum</b>, zet <b>Picnic</b> als winkel en neemt bezorgkosten, statiegeld en korting apart op. Dit werkt ook voor AH en Jumbo bezorgen en Crisp.</p>
+
+  <h2 id="controleren">6. Controleren, bewerken en handmatig invoeren</h2>
+  <p>Na het uitlezen zie je eerst een controlescherm. Er wordt pas iets opgeslagen als jij op <b>Opslaan</b> tikt.</p>
+  <ul><li>Controleer de <b>winkel</b>, de <b>datum</b> en het <b>totaal betaald</b>.</li><li>Wijkt de som van de producten af van het totaal, dan zie je het verschil in oranje.</li><li>Tik op een productnaam, prijs of categorie om die aan te passen. Met <b>×</b> verwijder je een regel, met <b>+ Regel</b> voeg je er een toe.</li></ul>
+  <h3>Handmatig invoeren</h3>
+  <p>Tik op <b>+ Handmatig</b>. Alleen de winkel en het totaal zijn verplicht.</p>
+  <h3>Bewerken of verwijderen</h3>
+  <p>Tik op een bon in de lijst en kies <b>Bewerken</b> of <b>Verwijderen</b>. Een verwijderde bon verdwijnt ook op de andere telefoons.</p>
+
+  <h2 id="budget">7. Budget, overzicht en analyse</h2>
+  <div class="tbl"><table>
+    <tr><th>Scherm</th><th>Wat zie je?</th></tr>
+    <tr><td><b>Overzicht</b></td><td>Totaal van de maand, budget, aantal bonnen, gemiddelde per bon, verschil met vorige maand, grootste categorieën en laatste bonnen.</td></tr>
+    <tr><td><b>Bonnen</b></td><td>Alle bonnen van de maand per dag, met een zoekveld voor winkel of product.</td></tr>
+    <tr><td><b>Analyse</b></td><td>De laatste zes maanden, per categorie, per winkel en per persoon, de grootste posten en de korting.</td></tr>
+  </table></div>
+  <p>Met de pijltjes <b>‹ ›</b> naast de maand blader je naar een andere maand.</p>
+  <h3>Een maandbudget instellen</h3>
+  <p>Tik op <b>Budget instellen</b> en vul het bedrag per maand in. De balk wordt <b>oranje</b> als je sneller uitgeeft dan gepland, en <b>rood</b> als het budget op is.</p>
+
+  <h2 id="exporteren">8. Exporteren naar Excel</h2>
+  <p>Ga naar <b>Bonnen</b> en tik op <b>Exporteer</b> (de gekozen maand) of <b>Alles exporteren</b>. Je krijgt een CSV-bestand met per product een regel, dat direct goed opent in Excel en Google Spreadsheets.</p>
+
+  <h2 id="samen">9. Samen gebruiken en offline</h2>
+  <ul><li>Alle telefoons worden automatisch bijgewerkt, elke 15 seconden en zodra je de app opent.</li><li>Het bolletje rechtsboven: <b>groen</b> is bijgewerkt, <b>oranje</b> is bezig, <b>rood</b> is geen verbinding.</li><li>Zonder internet kun je bonnen handmatig invoeren. Ze worden verstuurd zodra je weer online bent. Scannen werkt alleen met internet.</li><li>Een telefoon uit het huishouden halen: tik op de naam van het huishouden en kies <b>Dit toestel loskoppelen</b>.</li></ul>
+
+  <h2 id="problemen">10. Problemen oplossen</h2>
+  <div class="tbl"><table>
+    <tr><th>Probleem</th><th>Oplossing</th></tr>
+    <tr><td>Uitlezen duurt te lang of mislukt</td><td>Maak een scherpere foto met meer licht, of gebruik minder foto's tegelijk. Lukt het niet, voer de bon handmatig in.</td></tr>
+    <tr><td>"Geen bon herkend"</td><td>Zorg dat de hele bon in beeld is. Kies bij een digitale bon de PDF of een schermafbeelding van de bon zelf.</td></tr>
+    <tr><td>Een bedrag of categorie klopt niet</td><td>Pas het aan in het controlescherm, of open de bon en kies <b>Bewerken</b>.</td></tr>
+    <tr><td>Een andere telefoon ziet mijn bon niet</td><td>Controleer of beide telefoons dezelfde code gebruiken en of het bolletje groen is.</td></tr>
+    <tr><td>Bonnenboek staat niet in het deelmenu</td><td>Installeer de app via Chrome. Op de iPhone kies je het bestand via <b>Digitale bon of foto kiezen</b>.</td></tr>
+    <tr><td>Ik zie een nieuwe functie nog niet</td><td>De app werkt zichzelf bij als je hem opent. Sluit hem anders helemaal af en open hem opnieuw.</td></tr>
+    <tr><td>De PDF is te groot</td><td>Bestanden tot 4 MB worden geaccepteerd. Maak anders een schermafbeelding.</td></tr>
+  </table></div>
+
+  <p class="foot">Vragen of ideeën? Mail Erik: <b>erik@beltman.email</b></p>
+  <p><a class="btn" href="/#overzicht">‹ Terug naar Bonnenboek</a></p>
+</div>
+</body>
+</html>

@@ -1,10 +1,10 @@
 // Bonnenboek service worker: app shell offline, API always live.
-const CACHE = "bonnenboek-v2";
+const CACHE = "bonnenboek-v3";
 const SHARE = "bonnenboek-gedeeld";
-const SHELL = ["/", "/index.html", "/app.js", "/manifest.webmanifest", "/icons/icon.svg", "/icons/icon-192.png", "/icons/apple-touch-icon.png"];
+const SHELL = ["/", "/index.html", "/app.js", "/manifest.webmanifest", "/icons/icon.svg", "/icons/icon-192.png", "/icons/apple-touch-icon.png", "/handleiding.html"];
 
 self.addEventListener("install", (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL.map((u) => new Request(u, { cache: "reload" })))).then(() => self.skipWaiting()));
 });
 self.addEventListener("activate", (e) => {
   e.waitUntil(
@@ -43,7 +43,7 @@ self.addEventListener("fetch", (e) => {
   }
   // network first, fall back to cache (so updates arrive quickly but the app opens offline)
   e.respondWith(
-    fetch(req).then((res) => {
+    fetch(req, { cache: "no-cache" }).then((res) => {
       if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(req, copy)); }
       return res;
     }).catch(() => caches.match(req).then((hit) => hit || (req.mode === "navigate" ? caches.match("/index.html") : undefined))),

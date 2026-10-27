@@ -315,7 +315,7 @@ function settingsSheet(){
     <div class="actions"><button class="btn primary" data-share>Uitnodiging delen</button><button class="btn ghost" data-copy>Link kopiëren</button></div>
     <label class="field"><span class="lbl">Jouw naam (zichtbaar bij je bonnen)</span><input class="inp" id="sNaam" value="${esc(st.mijnNaam)}"></label>
     <p class="note">Laatst bijgewerkt: ${esc(last)}${pend?` · ${pend} wijziging${pend>1?"en":""} wacht${pend>1?"en":""} op verbinding`:""}</p>
-    <div class="actions">${isStandalone()?"":`<button class="btn ghost" data-install>App installeren</button>`}<a class="btn ghost" href="/handleiding.pdf" target="_blank" rel="noopener">Handleiding (PDF)</a></div>
+    <div class="actions">${isStandalone()?"":`<button class="btn ghost" data-install>App installeren</button>`}<a class="btn ghost" href="/handleiding.html">Handleiding</a></div>
     <button class="linkbtn" data-leave style="align-self:flex-start;color:var(--bad)">Dit toestel loskoppelen van het huishouden</button>`,
   sh=>{ sh.querySelector("[data-share]").onclick=shareInvite;
     sh.querySelector("[data-copy]").onclick=()=>copy(inviteLink(),"Link gekopieerd");
@@ -506,5 +506,11 @@ async function receiveShared(){
     else if(text.length>=10){ textSheet(); const t=$("tIn"); if(t) t.value=text }
   }catch(e){ toast("De gedeelde bon kon niet worden geopend.") }
 }
-if("serviceWorker" in navigator) addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));
+if("serviceWorker" in navigator){
+  const hadController=!!navigator.serviceWorker.controller; let reloading=false;
+  navigator.serviceWorker.addEventListener("controllerchange",()=>{ if(!hadController||reloading||sheetBusy()) return; reloading=true; location.reload() });
+  addEventListener("load",()=>navigator.serviceWorker.register("/sw.js",{updateViaCache:"none"}).then(reg=>{
+    document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") reg.update().catch(()=>{}) });
+  }).catch(()=>{}));
+}
 })();
