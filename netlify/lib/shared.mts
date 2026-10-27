@@ -64,6 +64,7 @@ export function schoonBon(b: any) {
     bron: b?.bron === "scan" ? "scan" : "handmatig",
     door: str(b?.door, 40),
     betaaldDoor: str(b?.betaaldDoor ?? b?.door, 40),
+    gekochtDoor: str(b?.gekochtDoor ?? b?.door, 40),
     aangemaakt: str(b?.aangemaakt, 40) || new Date().toISOString(),
     gewijzigd: new Date().toISOString(),
   };

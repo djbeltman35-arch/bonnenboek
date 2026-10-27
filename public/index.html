@@ -200,6 +200,14 @@ section.card h3{font-size:17px;font-weight:600}
 .pinfo .t i{display:block;height:100%;border-radius:4px}
 .psub{font-size:12.5px;color:var(--muted)}
 .person .amt{font-family:var(--f-mono);font-weight:600;font-size:16px;font-variant-numeric:tabular-nums}
+.rank{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+.rank li{display:grid;grid-template-columns:28px auto minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 6px;border-radius:10px}
+.rank .pos{font-family:var(--f-mono);font-weight:600;color:var(--muted);text-align:center;width:28px;height:28px;line-height:28px;border-radius:50%}
+.rank .top1 .pos{background:#E8B931;color:#2A2200}
+.rank .top2 .pos{background:#C3CBD1;color:#1E2428}
+.rank .top3 .pos{background:#C98B55;color:#2B1606}
+.rank .top1{background:color-mix(in srgb,#E8B931 14%,transparent)}
+.rank .amt{font-family:var(--f-mono);font-weight:600;font-size:15px;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
 .settle{border-top:1px dashed var(--line);padding-top:10px;display:flex;flex-direction:column;gap:4px;font-size:14px}
 .settle p{margin:0}
 .chips{display:flex;gap:6px;flex-wrap:wrap}

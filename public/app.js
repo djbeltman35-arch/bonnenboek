@@ -15,7 +15,7 @@ const st = {
   bonnen: {},          // id -> bon (incl. etag)
   budgetCent: null,
   queue: [],           // pending writes: {t:"put",id} | {t:"del",id} | {t:"budget",c}
-  view: "overzicht", ym: ym(new Date()), query: "", person: "",
+  view: "overzicht", ym: ym(new Date()), query: "", person: "", rankPeriod: "maand", rankSort: "bedrag",
   sync: "idle",        // idle | busy | ok | off | error
   lastSync: null,
 };
@@ -110,7 +110,7 @@ addEventListener("offline",()=>setSync("off"));
 function putBon(b){
   const clean={...b, items:(b.items||[]).filter(i=>i.naam||i.cent).map(i=>({naam:String(i.naam||"").slice(0,120),aantal:Number(i.aantal)||1,cent:i.cent|0,cat:CATS.includes(i.cat)?i.cat:"Overig"}))};
   delete clean._warn;
-  clean.id=clean.id||uid(); clean.door=clean.door||st.mijnNaam||""; clean.betaaldDoor=(clean.betaaldDoor||clean.door||"").trim(); clean.aangemaakt=clean.aangemaakt||new Date().toISOString();
+  clean.id=clean.id||uid(); clean.door=clean.door||st.mijnNaam||""; clean.betaaldDoor=(clean.betaaldDoor||clean.door||"").trim(); clean.gekochtDoor=(clean.gekochtDoor||clean.door||"").trim(); clean.aangemaakt=clean.aangemaakt||new Date().toISOString();
   clean._pend=true; st.bonnen[clean.id]=clean;
   st.queue=st.queue.filter(o=>!(o.t==="put"&&o.id===clean.id)); st.queue.push({t:"put",id:clean.id});
   save(); render(); sync(); return clean;
@@ -128,6 +128,25 @@ function byCategory(list){ const map={}; for(const r of list){ const items=r.ite
   return Object.entries(map).filter(([,v])=>v!==0).sort((a,b)=>b[1]-a[1]) }
 function byStore(list){ const map={}; for(const r of list){ const k=r.winkel||"Onbekend"; map[k]=map[k]||{c:0,n:0}; map[k].c+=r.totaalCent||0; map[k].n++ } return Object.entries(map).sort((a,b)=>b[1].c-a[1].c) }
 const payer = r => String(r.betaaldDoor||r.door||"").trim()||"Onbekend";
+const buyer = r => String(r.gekochtDoor||r.door||"").trim()||"Onbekend";
+const prodCount = r => (r.items||[]).filter(i=>i.cat!=="Korting"&&i.cat!=="Statiegeld").reduce((a,i)=>a+(Number(i.aantal)||1),0);
+function rankCard(){
+  const per=st.rankPeriod, by=st.rankSort, y=st.ym.slice(0,4);
+  const list=all().filter(r=>per==="maand"?(r.datum||"").startsWith(st.ym):per==="jaar"?(r.datum||"").startsWith(y):true);
+  const map={}; for(const r of list){ const k=buyer(r); const o=map[k]=map[k]||{c:0,n:0,p:0}; o.c+=r.totaalCent||0; o.n++; o.p+=prodCount(r) }
+  const key={bedrag:"c",producten:"p",keer:"n"}[by]; const rows=Object.entries(map).sort((a,b)=>b[1][key]-a[1][key]||b[1].c-a[1].c);
+  const perLabel={maand:ymLabel(st.ym),jaar:y,alles:"altijd"}[per];
+  const chip=(grp,v,l,cur)=>`<button class="chip" data-rank-${grp}="${v}" aria-pressed="${cur===v}">${l}</button>`;
+  const val=o=>by==="producten"?`${o.p} product${o.p===1?"":"en"}`:by==="keer"?`${o.n}× boodschappen`:eur(o.c);
+  const sub=o=>by==="bedrag"?`${o.n}× boodschappen · ${o.p} producten`:by==="producten"?`${o.n}× boodschappen · ${eur(o.c)}`:`${o.p} producten · ${eur(o.c)}`;
+  return `<section class="card" id="ranglijst"><div class="sechead"><h3>Ranglijst boodschappen doen</h3><span class="lbl">${esc(perLabel)}</span></div>
+    <div class="chips">${chip("period","maand","Deze maand",per)}${chip("period","jaar","Dit jaar",per)}${chip("period","alles","Altijd",per)}</div>
+    <div class="chips"><span class="lbl" style="align-self:center">Op</span>${chip("sort","bedrag","bedrag",by)}${chip("sort","producten","producten",by)}${chip("sort","keer","keer",by)}</div>
+    ${rows.length?`<ol class="rank">${rows.map(([n,o],i)=>`<li class="${i<3&&rows.length>1?"top top"+(i+1):""}"><span class="pos">${i+1}</span>
+      <span class="avatar" style="background:${n==="Onbekend"?"var(--muted)":personColor(n)}">${esc(initials(n))}</span>
+      <span class="pinfo"><span class="pname">${esc(n)}${isMe(n)?' <span class="tag">jij</span>':""}</span><span class="psub">${sub(o)}</span></span>
+      <span class="amt">${val(o)}</span></li>`).join("")}</ol>`:`<p class="note">Nog geen bonnen in deze periode.</p>`}
+  </section>` }
 const isMe = n => !!st.mijnNaam && n.toLowerCase()===st.mijnNaam.toLowerCase();
 function knownPeople(){ const set=new Map(); const add=n=>{ n=String(n||"").trim(); if(n&&!set.has(n.toLowerCase())) set.set(n.toLowerCase(),n) };
   add(st.mijnNaam); for(const r of all()){ add(r.betaaldDoor); add(r.door) } return [...set.values()] }
@@ -199,7 +218,7 @@ function renderOverview(){
         <div class="kpi"><span class="lbl">Gem. per bon</span><b>${eur(avg)}</b></div>
         <div class="kpi"><span class="lbl">vs. vorige mnd</span><b>${diff===null?"—":(diff>0?"+":"")+diff+"%"}</b></div>
       </div></section>`;
-  html+=personCard(list,total);
+  html+=personCard(list,total); if(all().length) html+=rankCard();
   if(!all().length){
     html+=`<div class="empty">
       <svg width="54" height="62" viewBox="0 0 30 34" aria-hidden="true"><path d="M3 2h24v28l-3-2.4-3 2.4-3-2.4-3 2.4-3-2.4-3 2.4-3-2.4L3 32z" fill="none" stroke="var(--muted)" stroke-width="1.4"/><path d="M8 9h14M8 14h10M8 19h14" stroke="var(--muted)" stroke-width="1.4" stroke-linecap="round"/></svg>
@@ -276,7 +295,7 @@ const head = t => `<header><h2>${esc(t)}</h2><button class="iconbtn" data-x aria
 function detailSheet(id){
   const r=st.bonnen[id]; if(!r) return; const items=r.items||[]; const rest=r.totaalCent-sumItems(items);
   openSheet(`${head(r.winkel)}
-    <div class="receipt-head"><b>${eur(r.totaalCent)}</b><span class="note">${esc(dayLabel(r.datum))}${r.betaalwijze?" · "+esc(r.betaalwijze):""}</span><span class="note">Betaald door <b>${esc(payer(r))}</b>${r.door&&r.door!==payer(r)?" · ingevoerd door "+esc(r.door):""}</span></div>
+    <div class="receipt-head"><b>${eur(r.totaalCent)}</b><span class="note">${esc(dayLabel(r.datum))}${r.betaalwijze?" · "+esc(r.betaalwijze):""}</span><span class="note">Gekocht door <b>${esc(buyer(r))}</b>${buyer(r)!==payer(r)?` · betaald door <b>${esc(payer(r))}</b>`:""}${r.door&&r.door!==buyer(r)&&r.door!==payer(r)?" · ingevoerd door "+esc(r.door):""}</span></div>
     ${items.length?`<div class="detail-items">${items.map(i=>`<div class="r"><span>${esc(i.naam)}${i.aantal>1?" ×"+i.aantal:""}<small>${esc(i.cat)}</small></span><span class="num">${eur(i.cent)}</span></div>`).join("")}</div>`:'<p class="note">Voor deze bon is alleen het totaal ingevoerd.</p>'}
     ${items.length&&Math.abs(rest)>1?`<p class="note">Verschil met totaal: <span class="num diff">${eur(rest)}</span></p>`:""}
     <div class="actions" id="dAct"><button class="btn primary" data-edit>Bewerken</button><button class="btn danger" data-del>Verwijderen</button></div>`,
@@ -300,7 +319,10 @@ function editSheet(r,info){
       <label class="field"><span class="lbl">Totaal betaald</span><input id="eTotaal" class="mono" inputmode="decimal" value="${r.totaalCent?centToInput(r.totaalCent):""}" placeholder="0,00"></label>
       <label class="field"><span class="lbl">Betaalwijze</span><select id="eBetaal">${["","pin","contant","creditcard","anders"].map(o=>`<option value="${o}"${o===(r.betaalwijze||"")?" selected":""}>${o||"—"}</option>`).join("")}</select></label>
     </div>
-    <label class="field"><span class="lbl">Betaald door</span><input id="eBetaald" list="peopleList" value="${esc(r.betaaldDoor||r.door||st.mijnNaam||"")}" placeholder="Naam"></label>
+    <div class="grid2">
+      <label class="field"><span class="lbl">Gekocht door</span><input id="eGekocht" list="peopleList" value="${esc(r.gekochtDoor||r.door||st.mijnNaam||"")}" placeholder="Naam"></label>
+      <label class="field"><span class="lbl">Betaald door</span><input id="eBetaald" list="peopleList" value="${esc(r.betaaldDoor||r.door||st.mijnNaam||"")}" placeholder="Naam"></label>
+    </div>
     <datalist id="peopleList">${knownPeople().map(n=>`<option value="${esc(n)}">`).join("")}</datalist>
     <datalist id="storeList">${stores.map(s=>`<option value="${esc(s)}">`).join("")}</datalist>
     <div class="sechead"><span class="lbl">Producten (optioneel)</span><button class="linkbtn" data-add>+ Regel</button></div>
@@ -314,11 +336,13 @@ function editSheet(r,info){
       sh.querySelector("#eSum").innerHTML=r.items.length?`<span>Som producten <b>${eur(s)}</b></span>${Math.abs(d)>1?`<span class="diff">Verschil met totaal ${eur(d)}</span>`:`<span>Klopt met totaal ✓</span>`}`:`<span>Zonder productregels telt het totaal als "Niet ingedeeld".</span>` };
     const redraw=()=>{ read(); sh.querySelector("#eItems").innerHTML=r.items.map(itemRow).join(""); upd() };
     sh.addEventListener("input",upd); upd();
+    { const g=sh.querySelector("#eGekocht"), b=sh.querySelector("#eBetaald"); let prev=g.value;
+      g.addEventListener("input",()=>{ if(b.value===prev) b.value=g.value; prev=g.value }) }
     sh.querySelector("[data-add]").onclick=()=>{ r.items.push({naam:"",cent:0,cat:"Overig",aantal:1}); redraw(); const els=sh.querySelectorAll(".item input[data-f=naam]"); els[els.length-1].focus() };
     sh.querySelector("#eItems").addEventListener("click",e=>{ const k=e.target.dataset.rm; if(k!==undefined){ read(); r.items.splice(+k,1); redraw() } });
     const skip=sh.querySelector("[data-skip]"); if(skip) skip.onclick=()=>nextInQueue();
     sh.querySelector("[data-save]").onclick=()=>{ read(); const err=sh.querySelector("#eErr");
-      r.winkel=sh.querySelector("#eWinkel").value.trim(); r.datum=sh.querySelector("#eDatum").value||today(); r.betaalwijze=sh.querySelector("#eBetaal").value; r.betaaldDoor=sh.querySelector("#eBetaald").value.trim();
+      r.winkel=sh.querySelector("#eWinkel").value.trim(); r.datum=sh.querySelector("#eDatum").value||today(); r.betaalwijze=sh.querySelector("#eBetaal").value; r.betaaldDoor=sh.querySelector("#eBetaald").value.trim(); r.gekochtDoor=sh.querySelector("#eGekocht").value.trim();
       r.totaalCent=parseEur(sh.querySelector("#eTotaal").value); if(!r.totaalCent&&r.items.length) r.totaalCent=sumItems(r.items);
       if(!r.winkel){ err.hidden=false; err.textContent="Vul de naam van de winkel in."; return }
       if(!r.totaalCent){ err.hidden=false; err.textContent="Vul het totaalbedrag in, bijvoorbeeld 23,45."; return }
@@ -476,9 +500,9 @@ function exportCsv(allMonths){
   const list=(allMonths?all():monthBonnen()).sort((a,b)=>(a.datum||"").localeCompare(b.datum||""));
   if(!list.length){ toast("Geen bonnen om te exporteren"); return }
   const q=v=>`"${String(v??"").replace(/"/g,'""')}"`; const n=c=>((c||0)/100).toFixed(2).replace(".",",");
-  const rows=[["Datum","Winkel","Product","Aantal","Bedrag","Categorie","Bontotaal","Betaalwijze","Betaald door","Ingevoerd door"].join(";")];
-  for(const r of list){ if(!(r.items||[]).length) rows.push([r.datum,q(r.winkel),"","",n(r.totaalCent),"Niet ingedeeld",n(r.totaalCent),r.betaalwijze||"",q(payer(r)),q(r.door)].join(";"));
-    else for(const i of r.items) rows.push([r.datum,q(r.winkel),q(i.naam),i.aantal||1,n(i.cent),q(i.cat),n(r.totaalCent),r.betaalwijze||"",q(payer(r)),q(r.door)].join(";")) }
+  const rows=[["Datum","Winkel","Product","Aantal","Bedrag","Categorie","Bontotaal","Betaalwijze","Gekocht door","Betaald door","Ingevoerd door"].join(";")];
+  for(const r of list){ if(!(r.items||[]).length) rows.push([r.datum,q(r.winkel),"","",n(r.totaalCent),"Niet ingedeeld",n(r.totaalCent),r.betaalwijze||"",q(buyer(r)),q(payer(r)),q(r.door)].join(";"));
+    else for(const i of r.items) rows.push([r.datum,q(r.winkel),q(i.naam),i.aantal||1,n(i.cent),q(i.cat),n(r.totaalCent),r.betaalwijze||"",q(buyer(r)),q(payer(r)),q(r.door)].join(";")) }
   const blob=new Blob(["﻿"+rows.join("\r\n")],{type:"text/csv;charset=utf-8"});
   const name=allMonths?"boodschappen-alles.csv":`boodschappen-${st.ym}.csv`;
   const file=new File([blob],name,{type:"text/csv"});
@@ -508,11 +532,14 @@ $("prevM").onclick=()=>{ st.ym=shiftYm(st.ym,-1); render() };
 $("nextM").onclick=()=>{ if(st.ym<ym(new Date())){ st.ym=shiftYm(st.ym,1); render() } };
 $("view").addEventListener("click",e=>{ const o=e.target.closest("[data-open]"); if(o){ detailSheet(o.dataset.open); return }
   const pr=e.target.closest("[data-person]"); if(pr){ st.person=pr.dataset.person; st.query=""; location.hash="bonnen"; return }
+  const rp=e.target.closest("[data-rank-period]"); if(rp){ st.rankPeriod=rp.dataset.rankPeriod; redrawRank(); return }
+  const rs=e.target.closest("[data-rank-sort]"); if(rs){ st.rankSort=rs.dataset.rankSort; redrawRank(); return }
   const pf=e.target.closest("[data-person-filter]"); if(pf){ st.person=pf.dataset.personFilter; renderList(); return }
   const a=e.target.closest("[data-act]"); if(!a) return; const act=a.dataset.act;
   if(act==="budget") budgetSheet(); else if(act==="scan") scanSheet(); else if(act==="invite") settingsSheet();
   else if(act==="export") exportCsv(false); else if(act==="exportAll") exportCsv(true);
   else if(act==="install") installFlow(); else if(act==="hideInstall"){ try{ localStorage.setItem("bb.hideInstall","1") }catch(e){} render() } });
+function redrawRank(){ const el=$("ranglijst"); if(el) el.outerHTML=rankCard() }
 const VIEWS=["overzicht","bonnen","analyse"];
 function route(){ const h=location.hash.slice(1); st.view=VIEWS.includes(h)?h:"overzicht"; render(); scrollTo(0,0) }
 addEventListener("hashchange",route);
