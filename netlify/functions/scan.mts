@@ -14,7 +14,7 @@ export default async (req: Request) => {
   const blocks: any[] = [];
   for (const d of files) {
     const m = /^data:(image\/(?:jpeg|png|webp|gif)|application\/pdf);base64,(.+)$/.exec(String(d));
-    if (!m) continue;
+    if (!m || m[2].length < 4000) continue; // lege of piepkleine afbeelding
     if (m[1] === "application/pdf")
       blocks.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: m[2] } });
     else blocks.push({ type: "image", source: { type: "base64", media_type: m[1], data: m[2] } });
@@ -40,7 +40,8 @@ Regels:
 - "betaalwijze": "pin", "contant", "creditcard", "anders" of null. iDEAL, incasso of betalen via een app is "anders".
 - Online boodschappen (zoals Picnic, AH thuisbezorgd, Jumbo bezorgen, Crisp): gebruik de leverdatum als datum, de bezorgdienst als winkel (bijv. "Picnic"), en neem bezorg- of servicekosten op als regel met categorie "Overig".
 - Een bon of factuur kan meerdere pagina's hebben: neem alle producten van alle pagina's mee.
-- Is het geen kassabon of aankoopbon: {"isBon":false}.`;
+- Elke aankoopbon telt, ook van een tankstation, drogisterij, bakker, markt of webwinkel. Brandstof krijgt categorie "Overig".
+- Alleen als er echt geen bon of aankoop te zien is: {"isBon":false}.`;
 
   try {
     const anthropic = new Anthropic({ timeout: 55_000, maxRetries: 0 });

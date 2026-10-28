@@ -527,7 +527,8 @@ async function decodeSmall(file,maxW,maxLong){
   finally{ setTimeout(()=>URL.revokeObjectURL(url),1000) }
 }
 function toCanvas(src,maxLong,maxPx){
-  const w0=src.naturalWidth||src.width, h0=src.naturalHeight||src.height;
+  const w0=src.videoWidth||src.naturalWidth||src.width, h0=src.videoHeight||src.naturalHeight||src.height;
+  if(!w0||!h0) throw new Error("De camera gaf nog geen beeld. Wacht even en probeer het opnieuw.");
   let s=Math.min(1,maxLong/Math.max(w0,h0)); if(w0*h0*s*s>maxPx) s=Math.sqrt(maxPx/(w0*h0));
   const c=document.createElement("canvas"); c.width=Math.max(1,Math.round(w0*s)); c.height=Math.max(1,Math.round(h0*s));
   const g=c.getContext("2d"); g.fillStyle="#fff"; g.fillRect(0,0,c.width,c.height); g.drawImage(src,0,0,c.width,c.height); return c
@@ -591,10 +592,10 @@ async function cameraSheet(){
       hint.textContent=e&&e.name==="NotAllowedError"?"Geen toegang tot de camera. Sta de camera toe in de instellingen van je telefoon, of kies een foto uit je galerij.":"De camera kon niet worden gestart.";
       shot.textContent="Camera-app gebruiken"; shot.disabled=false; shot.onclick=()=>{ $("fileCam").click() }; return }
     shot.onclick=async()=>{ if(!v.videoWidth) return; shot.disabled=true;
-      try{ const c=toCanvas(v,2400,3.2e6); await addCanvas(c); c.width=c.height=0;
+      try{ const c=toCanvas(v,2400,3.2e6); if(c.width<300||c.height<300) throw new Error("De foto is te klein. Probeer het opnieuw."); await addCanvas(c); c.width=c.height=0;
         sh.querySelector("#camN").textContent=picked.length; v.classList.add("flash"); setTimeout(()=>v.classList.remove("flash"),180);
         toast(picked.length===1?"Foto gemaakt. Lange bon? Maak nog een foto, anders tik op Klaar.":`${picked.length} foto's gemaakt`) }
-      catch(e){ toast("De foto kon niet worden gemaakt. Probeer het opnieuw.") }
+      catch(e){ toast(e.message||"De foto kon niet worden gemaakt. Probeer het opnieuw.") }
       finally{ shot.disabled=false } };
   });
 }
