@@ -70,7 +70,8 @@ async function flushQueue(){
     else if(op.t==="del"){ await api("DELETE",`/api/bonnen?code=${encodeURIComponent(st.code)}&id=${encodeURIComponent(op.id)}`) }
     else if(op.t==="budget"){ await api("PATCH","/api/bonnen",{code:st.code,budgetCent:op.c}) }
     else if(op.t==="inst"){ await api("PATCH","/api/bonnen",{code:st.code,instellingen:op.patch}) }
-    else if(op.t==="notify"){ await api("PUT","/api/push",{code:st.code,naam:op.naar,soort:"betaald",van:op.van,cent:op.cent,aantal:op.aantal}).catch(()=>{}) }
+    else if(op.t==="notify"){ const r=await api("PUT","/api/push",{code:st.code,naam:op.naar,soort:"betaald",van:op.van,cent:op.cent,aantal:op.aantal}).catch(()=>null);
+      if(r&&r.toestellen===0) toast(`${op.naar} heeft geen meldingen aanstaan en ziet de betaling bij het openen van de app.`) }
     st.queue.shift(); save();
   }
 }
@@ -171,6 +172,13 @@ function verzoeken(){ const out=[];
   return out.sort((a,b)=>sortRec(a.bon,b.bon)) }
 function verzoekVoor(r){ const g=st.regels.find(g=>same(buyer(r),g.van)&&(r.aangemaakt||"")>=g.sinds); return g?{...g,cent:Math.round((r.totaalCent||0)*g.pct/100)}:null }
 function pairs(list){ const m=new Map(); for(const v of list){ const k=v.van.toLowerCase()+"→"+v.aan.toLowerCase(); if(!m.has(k)) m.set(k,{van:v.van,aan:v.aan,items:[]}); m.get(k).items.push(v) } return [...m.values()] }
+function pushBanner(){
+  if(!st.mijnNaam||!st.regels.some(g=>same(g.van,st.mijnNaam)||same(g.aan,st.mijnNaam))) return "";
+  if(!("Notification" in window)||!("PushManager" in window)) return "";
+  if(st.pushOn&&Notification.permission==="granted") return "";
+  try{ if(localStorage.getItem("bb.hidePush")) return "" }catch(e){}
+  const ik=st.regels.find(g=>same(g.van,st.mijnNaam)); const tekst=ik?`Krijg een melding als ${esc(ik.aan)} je bon heeft betaald.`:"Krijg een melding bij een nieuw betaalverzoek.";
+  return `<div class="banner"><p><b>Meldingen aanzetten</b><br>${tekst}</p><button class="btn primary small" data-act="pushOn" style="flex:none">Aanzetten</button><button class="iconbtn" data-act="hidePush" aria-label="Verbergen" style="width:32px;height:32px">✕</button></div>` }
 function requestBanner(){
   if(!st.mijnNaam||!st.regels.length) return "";
   const open=verzoeken().filter(v=>!v.betaald); let html="";
@@ -315,7 +323,7 @@ function renderOverview(){
   const list=monthBonnen(); const total=monthTotal(st.ym); const prev=monthTotal(shiftYm(st.ym,-1));
   const cats=byCategory(list).slice(0,6); const avg=list.length?Math.round(total/list.length):0;
   const diff=prev?Math.round((total-prev)/prev*100):null;
-  let html=requestBanner()+installBanner()+`<section class="total">
+  let html=requestBanner()+pushBanner()+installBanner()+`<section class="total">
       <span class="lbl">Uitgegeven aan boodschappen</span>
       <div class="big">${eur(total)}</div>
       ${budgetBlock(total)}
@@ -704,6 +712,8 @@ $("view").addEventListener("click",e=>{ const o=e.target.closest("[data-open]");
   const pr=e.target.closest("[data-person]"); if(pr){ st.person=pr.dataset.person; st.query=""; location.hash="bonnen"; return }
   const pf=e.target.closest("[data-person-filter]"); if(pf){ st.person=pf.dataset.personFilter; renderList(); return }
   const a=e.target.closest("[data-act]"); if(!a) return; const act=a.dataset.act;
+  if(act==="pushOn"){ (async()=>{ try{ await enablePush(); toast("Meldingen staan aan"); render() }catch(e){ toast(e.message) } })(); return }
+  if(act==="hidePush"){ try{ localStorage.setItem("bb.hidePush","1") }catch(e){} render(); return }
   if(act==="verzoeken") verzoekenSheet(); else if(act==="budget") budgetSheet(); else if(act==="scan") scanSheet(); else if(act==="invite") settingsSheet();
   else if(act==="export") exportCsv(false); else if(act==="exportAll") exportCsv(true);
   else if(act==="install") installFlow(); else if(act==="hideInstall"){ try{ localStorage.setItem("bb.hideInstall","1") }catch(e){} render() } });
