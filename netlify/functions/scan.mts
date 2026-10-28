@@ -19,9 +19,11 @@ export default async (req: Request) => {
       blocks.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: m[2] } });
     else blocks.push({ type: "image", source: { type: "base64", media_type: m[1], data: m[2] } });
   }
-  const pasted = String(body.text ?? "").slice(0, 30000).trim();
+  let pasted = String(body.text ?? "").slice(0, 30000).trim();
+  if (/^function \w*\(\)\s*\{\s*\[native code\]\s*\}$/.test(pasted)) pasted = ""; // oude app-versie stuurde dit per ongeluk mee
   if (pasted) blocks.push({ type: "text", text: "Tekst van de bon (geplakt door de gebruiker):\n\n" + pasted });
-  if (!blocks.length) return fout("Geen bon ontvangen.");
+  console.log("scan", JSON.stringify({ fotos: blocks.filter((b) => b.type === "image").length, pdf: blocks.filter((b) => b.type === "document").length, tekst: pasted.length, kb: Math.round(files.join("").length / 1024) }));
+  if (!blocks.length) return fout("De foto is niet goed aangekomen. Sluit Bonnenboek helemaal af, open hem opnieuw en probeer het nog eens.", 400);
 
   const vandaag = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Amsterdam" });
   const prompt = `Hierboven staat één kassabon (meestal Nederlands, Belgisch of Duits): een foto van een papieren bon, een schermafbeelding of PDF van een digitale bon uit de app of e-mail van de winkel, of geplakte tekst. Meerdere delen horen samen bij dezelfde bon. Lees de bon zorgvuldig uit.
