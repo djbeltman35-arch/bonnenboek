@@ -511,7 +511,7 @@ const isPdf = f => f && (f.type==="application/pdf"||/\.pdf$/i.test(f.name||""))
 const isImg = f => f && (f.type.startsWith("image/")||/\.(heic|heif|jpe?g|png|webp)$/i.test(f.name||""));
 const thumbs=new WeakMap();
 function thumb(f){
-  if(f.text!==undefined) return `<span class="doc"><b>TEKST</b><small>${esc(f.text.slice(0,40))}…</small></span>`;
+  if(typeof f.text==="string") return `<span class="doc"><b>TEKST</b><small>${esc(f.text.slice(0,40))}…</small></span>`;
   if(isPdf(f)) return `<span class="doc"><b>PDF</b><small>${esc(f.name||"bon.pdf")}</small></span>`;
   const t=thumbs.get(f); return t?`<img src="${t}" alt="Gekozen bon">`:`<span class="doc"><b>FOTO</b></span>`;
 }
@@ -622,7 +622,7 @@ $("fileGal").onchange=e=>{ addFiles(e.target.files); e.target.value="" };
 
 function readDataUrl(f){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=()=>rej(new Error("decode")); r.readAsDataURL(f) }) }
 async function prepare(item){
-  if(item.text!==undefined) return {text:item.text};
+  if(typeof item.text==="string") return {text:item.text};
   if(isPdf(item)){ if(item.size>4e6) throw new Error("Deze PDF is te groot (meer dan 4 MB). Maak een schermafbeelding van de bon."); const d=await readDataUrl(item); return {file:d.replace(/^data:[^;]*;/,"data:application/pdf;")} }
   return {file:await compress(item)};
 }
