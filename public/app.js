@@ -387,12 +387,12 @@ function renderAnalyse(){
 
 /* ================= sheets ================= */
 let lastFocus=null;
-function openSheet(html,onMount){ lastFocus=lastFocus||document.activeElement;
+function openSheet(html,onMount){ if(typeof stopCam==="function"&&!/id="camV"/.test(html)) stopCam(); lastFocus=lastFocus||document.activeElement;
   $("sheetRoot").innerHTML=`<div class="overlay" data-close-bg><div class="sheet" role="dialog" aria-modal="true">${html}</div></div>`;
   const sh=$("sheetRoot").querySelector(".sheet"); onMount&&onMount(sh);
   const x=sh.querySelector("[data-x]"); if(x&&!x.onclick) x.onclick=closeSheet;
   sh.scrollTop=0 }
-function closeSheet(){ $("sheetRoot").innerHTML=""; scanQueue=[]; picked=[]; if(lastFocus&&lastFocus.focus) lastFocus.focus(); lastFocus=null }
+function closeSheet(){ stopCam(); $("sheetRoot").innerHTML=""; scanQueue=[]; picked=[]; if(lastFocus&&lastFocus.focus) lastFocus.focus(); lastFocus=null }
 $("sheetRoot").addEventListener("click",e=>{ if(e.target.hasAttribute&&e.target.hasAttribute("data-close-bg")) closeSheet() });
 document.addEventListener("keydown",e=>{ if(e.key==="Escape"&&sheetBusy()) closeSheet() });
 const head = t => `<header><h2>${esc(t)}</h2><button class="iconbtn" data-x aria-label="Sluiten">✕</button></header>`;
@@ -509,11 +509,42 @@ async function installFlow(){
 let scanQueue=[], scanTotal=0, picked=[];
 const isPdf = f => f && (f.type==="application/pdf"||/\.pdf$/i.test(f.name||""));
 const isImg = f => f && (f.type.startsWith("image/")||/\.(heic|heif|jpe?g|png|webp)$/i.test(f.name||""));
+const thumbs=new WeakMap();
 function thumb(f){
   if(f.text!==undefined) return `<span class="doc"><b>TEKST</b><small>${esc(f.text.slice(0,40))}…</small></span>`;
   if(isPdf(f)) return `<span class="doc"><b>PDF</b><small>${esc(f.name||"bon.pdf")}</small></span>`;
-  return `<img src="${URL.createObjectURL(f)}" alt="Gekozen bon">`;
+  const t=thumbs.get(f); return t?`<img src="${t}" alt="Gekozen bon">`:`<span class="doc"><b>FOTO</b></span>`;
 }
+/* Verklein een foto meteen tot max ~1600x2400 JPEG, zodat grote camerafoto's geen geheugen vreten. */
+async function decodeSmall(file,maxW,maxLong){
+  if(file.size>1.5e6&&window.createImageBitmap){
+    try{ let bm=await createImageBitmap(file,{resizeWidth:maxW,resizeQuality:"high",imageOrientation:"from-image"});
+      if(bm.height>maxLong){ const w=Math.round(bm.width*maxLong/bm.height); const b2=await createImageBitmap(bm,{resizeWidth:w,resizeHeight:maxLong,resizeQuality:"high"}); bm.close(); bm=b2 }
+      return bm }catch(e){}
+  }
+  const url=URL.createObjectURL(file);
+  try{ return await new Promise((res,rej)=>{ const i=new Image(); i.decoding="async"; i.onload=()=>res(i); i.onerror=()=>rej(new Error("decode")); i.src=url }) }
+  finally{ setTimeout(()=>URL.revokeObjectURL(url),1000) }
+}
+function toCanvas(src,maxLong,maxPx){
+  const w0=src.naturalWidth||src.width, h0=src.naturalHeight||src.height;
+  let s=Math.min(1,maxLong/Math.max(w0,h0)); if(w0*h0*s*s>maxPx) s=Math.sqrt(maxPx/(w0*h0));
+  const c=document.createElement("canvas"); c.width=Math.max(1,Math.round(w0*s)); c.height=Math.max(1,Math.round(h0*s));
+  const g=c.getContext("2d"); g.fillStyle="#fff"; g.fillRect(0,0,c.width,c.height); g.drawImage(src,0,0,c.width,c.height); return c
+}
+const canvasBlob=(c,q)=>new Promise((res,rej)=>c.toBlob(b=>b?res(b):rej(new Error("De foto is te groot om te verwerken. Probeer het opnieuw.")),"image/jpeg",q));
+async function shrink(file){
+  if(/\.(heic|heif)$/i.test(file.name||"")||/hei[cf]/i.test(file.type)){
+    try{ await decodeSmall(file,1600,2400) }catch(e){ throw new Error("Deze foto is in HEIC-formaat en kan niet worden geopend. Maak de foto met de knop Foto maken in Bonnenboek, of zet in je camera-instellingen het formaat op JPEG.") } }
+  let src; try{ src=await decodeSmall(file,1600,2400) }catch(e){ throw new Error("Deze foto kon niet worden geopend. Kies een JPG of PNG, of maak de foto met Foto maken in Bonnenboek.") }
+  const c=toCanvas(src,2400,3.2e6); if(src.close) src.close();
+  const blob=await canvasBlob(c,0.85);
+  const t=toCanvas(c,240,1e5); const out=new File([blob],(file.name||"bon").replace(/\.[^.]+$/,"")+".jpg",{type:"image/jpeg"});
+  thumbs.set(out,t.toDataURL("image/jpeg",0.7)); c.width=c.height=0; return out
+}
+async function addCanvas(c){
+  const blob=await canvasBlob(c,0.85); const f=new File([blob],"bon-"+Date.now()+".jpg",{type:"image/jpeg"});
+  thumbs.set(f,toCanvas(c,240,1e5).toDataURL("image/jpeg",0.7)); picked.push(f) }
 function scanSheet(){
   picked=picked||[];
   const draw=()=>{ const sh=$("sheetRoot").querySelector(".sheet"); if(!sh||!sh.querySelector("#pv")) return;
@@ -531,10 +562,41 @@ function scanSheet(){
     <label class="toggle" id="oneWrap" hidden><input type="checkbox" id="oneBon"> Alles hoort bij één bon</label>
     <button class="btn primary" data-go disabled>Uitlezen</button>`,
   sh=>{ sh.querySelector("[data-x]").onclick=()=>{ picked=[]; closeSheet() };
-    sh.querySelector("[data-cam]").onclick=()=>$("fileCam").click(); sh.querySelector("[data-gal]").onclick=()=>$("fileGal").click();
+    sh.querySelector("[data-cam]").onclick=cameraSheet; sh.querySelector("[data-gal]").onclick=()=>$("fileGal").click();
     sh.querySelector("[data-text]").onclick=textSheet;
     sh.querySelector("[data-go]").onclick=()=>{ const one=sh.querySelector("#oneBon").checked; const files=picked; picked=[];
       runQueue(one||files.length===1?[files]:files.map(f=>[f])) }; draw() });
+}
+/* Ingebouwde camera: geen aparte camera-app, dus geen enorme foto's en Android sluit de app niet af. */
+let camStream=null;
+function stopCam(){ if(camStream){ camStream.getTracks().forEach(t=>t.stop()); camStream=null } }
+async function cameraSheet(){
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){ $("fileCam").click(); return }
+  openSheet(`<header><h2>Foto maken</h2><button class="iconbtn" data-x aria-label="Sluiten">✕</button></header>
+    <div class="cam"><video id="camV" playsinline autoplay muted></video><div class="camframe" aria-hidden="true"></div><p class="camhint" id="camHint">Camera starten…</p></div>
+    <div class="actions"><button class="btn primary" data-shot disabled>Foto maken</button><button class="btn ghost" data-torch hidden>Lamp aan</button><button class="btn ghost" data-done>Klaar (<span id="camN">${picked.length}</span>)</button></div>
+    <p class="note">Leg de bon plat en vul het kader. Bij een lange bon maak je meerdere foto's van boven naar beneden.</p>`,
+  async sh=>{
+    const done=()=>{ stopCam(); scanSheet() };
+    sh.querySelector("[data-x]").onclick=done; sh.querySelector("[data-done]").onclick=done;
+    const v=sh.querySelector("#camV"), shot=sh.querySelector("[data-shot]"), hint=sh.querySelector("#camHint"), torchB=sh.querySelector("[data-torch]");
+    try{
+      camStream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:"environment"},width:{ideal:2560},height:{ideal:1920}}});
+      if(!$("sheetRoot").contains(v)){ stopCam(); return }
+      v.srcObject=camStream; await v.play().catch(()=>{}); hint.textContent=""; shot.disabled=false;
+      const track=camStream.getVideoTracks()[0]; const caps=track.getCapabilities?track.getCapabilities():{};
+      if(caps.torch){ let on=false; torchB.hidden=false; torchB.onclick=async()=>{ on=!on; try{ await track.applyConstraints({advanced:[{torch:on}]}); torchB.textContent=on?"Lamp uit":"Lamp aan" }catch(e){} } }
+      if(caps.focusMode&&caps.focusMode.includes("continuous")) track.applyConstraints({advanced:[{focusMode:"continuous"}]}).catch(()=>{});
+    }catch(e){ stopCam();
+      hint.textContent=e&&e.name==="NotAllowedError"?"Geen toegang tot de camera. Sta de camera toe in de instellingen van je telefoon, of kies een foto uit je galerij.":"De camera kon niet worden gestart.";
+      shot.textContent="Camera-app gebruiken"; shot.disabled=false; shot.onclick=()=>{ $("fileCam").click() }; return }
+    shot.onclick=async()=>{ if(!v.videoWidth) return; shot.disabled=true;
+      try{ const c=toCanvas(v,2400,3.2e6); await addCanvas(c); c.width=c.height=0;
+        sh.querySelector("#camN").textContent=picked.length; v.classList.add("flash"); setTimeout(()=>v.classList.remove("flash"),180);
+        toast(picked.length===1?"Foto gemaakt. Lange bon? Maak nog een foto, anders tik op Klaar.":`${picked.length} foto's gemaakt`) }
+      catch(e){ toast("De foto kon niet worden gemaakt. Probeer het opnieuw.") }
+      finally{ shot.disabled=false } };
+  });
 }
 function textSheet(){
   openSheet(`${head("Tekst plakken")}
@@ -545,9 +607,16 @@ function textSheet(){
     sh.querySelector("[data-go]").onclick=()=>{ const t=sh.querySelector("#tIn").value.trim(); if(t.length<10){ toast("Plak eerst de tekst van de bon"); return } runQueue([[{text:t.slice(0,30000)}]]) };
   });
 }
-function addFiles(list){ let skipped=0; for(const f of list){ if(isImg(f)||isPdf(f)) picked.push(f); else skipped++ }
+async function addFiles(list){ list=[...list]; let skipped=0;
+  if(!$("sheetRoot").querySelector("#pv")) scanSheet();
+  const info=$("pickInfo"); if(info) info.textContent="Foto's verkleinen…";
+  for(const f of list){
+    if(isPdf(f)){ picked.push(f); continue }
+    if(!isImg(f)){ skipped++; continue }
+    try{ picked.push(await shrink(f)) }catch(e){ toast(e.message) }
+    scanSheet.draw&&scanSheet.draw() }
   if(skipped) toast("Alleen foto's, schermafbeeldingen en PDF's kunnen worden uitgelezen");
-  if(!$("sheetRoot").querySelector("#pv")) scanSheet(); else scanSheet.draw() }
+  scanSheet.draw&&scanSheet.draw() }
 $("fileCam").onchange=e=>{ addFiles(e.target.files); e.target.value="" };
 $("fileGal").onchange=e=>{ addFiles(e.target.files); e.target.value="" };
 
@@ -558,12 +627,8 @@ async function prepare(item){
   return {file:await compress(item)};
 }
 async function compress(file){
-  const img=await new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=()=>rej(new Error("decode")); i.src=URL.createObjectURL(file) });
-  const maxLong=2000, maxPx=3.2e6; let w=img.naturalWidth, h=img.naturalHeight;
-  let s=Math.min(1,maxLong/Math.max(w,h)); if(w*h*s*s>maxPx) s=Math.sqrt(maxPx/(w*h));
-  const c=document.createElement("canvas"); c.width=Math.round(w*s); c.height=Math.round(h*s);
-  const g=c.getContext("2d"); g.fillStyle="#fff"; g.fillRect(0,0,c.width,c.height); g.drawImage(img,0,0,c.width,c.height);
-  return c.toDataURL("image/jpeg",0.82);
+  if(!thumbs.has(file)) file=await shrink(file);   // al verkleind? dan alleen omzetten
+  return await readDataUrl(file);
 }
 function runQueue(groups){ scanQueue=groups.slice(); scanTotal=groups.length; nextInQueue() }
 async function nextInQueue(){
@@ -578,7 +643,7 @@ async function nextInQueue(){
   const info=scanQueue.length?`${label} · daarna nog ${scanQueue.length}`:label;
   try{
     if(!navigator.onLine) throw Object.assign(new Error("offline"),{status:0});
-    const parts=await Promise.all(grp.map(prepare));
+    const parts=[]; for(const it of grp) parts.push(await prepare(it));
     const images=parts.filter(p=>p.file).map(p=>p.file); const text=parts.filter(p=>p.text).map(p=>p.text).join("\n\n");
     const res=await api("POST","/api/scan",{code:st.code,images,text},70000);
     if(cancelled) return;

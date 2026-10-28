@@ -168,6 +168,12 @@ section.card h3{font-size:17px;font-weight:600}
 .actions .btn.primary{flex:1 1 180px}
 .preview{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
 .preview img{height:120px;width:auto;max-width:none;border-radius:8px;border:1px solid var(--line)}
+.cam{position:relative;border-radius:12px;overflow:hidden;background:#000;aspect-ratio:3/4;max-height:58vh;max-width:100%;margin:0 auto;width:100%}
+.cam video{width:100%;height:100%;object-fit:cover;display:block;transition:opacity .15s}
+.cam video.flash{opacity:.2}
+.camframe{position:absolute;inset:6% 10%;border:2px dashed rgba(255,255,255,.75);border-radius:10px;pointer-events:none}
+.camhint{position:absolute;left:12px;right:12px;bottom:12px;margin:0;color:#fff;font-size:14px;text-align:center;text-shadow:0 1px 3px #000}
+.camhint:empty{display:none}
 .doc{flex:none;width:90px;height:120px;border-radius:8px;border:1px solid var(--line);background:var(--bg);display:flex;flex-direction:column;justify-content:center;align-items:center;gap:6px;padding:8px;text-align:center}
 .doc b{font-family:var(--f-mono);color:var(--accent)}
 .doc small{font-size:10.5px;color:var(--muted);word-break:break-all;line-height:1.25;overflow:hidden;max-height:4em}
