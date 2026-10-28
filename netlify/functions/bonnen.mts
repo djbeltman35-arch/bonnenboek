@@ -1,20 +1,20 @@
 import type { Config, Context } from "@netlify/functions";
-import { store, json, fout, normCode, huishouden, validId, schoonBon, schoonInstellingen } from "../lib/shared.mts";
+import { store, json, fout, toegang, validId, schoonBon, schoonInstellingen } from "../lib/shared.mts";
 import { meldBetaalverzoek, trekVerzoekIn } from "../lib/push.mts";
 
 // Gedeelde bonnen van één huishouden. Elke bon is een eigen blob, zodat twee telefoons
 // nooit elkaars wijzigingen overschrijven.
-//   GET    /api/bonnen?code=…              -> { naam, budgetCent, index:[{id, etag}] }
-//   POST   /api/bonnen  {code, ids:[…]}    -> { bonnen:[{id, etag, …}] }   (alleen gewijzigde ophalen)
-//   PUT    /api/bonnen  {code, bon:{id,…}} -> { id, etag }
-//   DELETE /api/bonnen?code=…&id=…         -> { ok }
-//   PATCH  /api/bonnen  {code, instellingen:{…}} -> instellingen  (budget, betaalregels, rekeningen; samengevoegd)
+//   (alle verzoeken: headers x-huishouden + Authorization: Bearer <sleutel>)
+//   GET    /api/bonnen              -> { naam, budgetCent, index:[{id, etag}] }
+//   POST   /api/bonnen  {ids:[…]}    -> { bonnen:[{id, etag, …}] }   (alleen gewijzigde ophalen)
+//   PUT    /api/bonnen  {bon:{id,…}} -> { id, etag }
+//   DELETE /api/bonnen?id=…         -> { ok }
+//   PATCH  /api/bonnen  {instellingen:{…}} -> instellingen  (budget, betaalregels, rekeningen; samengevoegd)
 export default async (req: Request, context: Context) => {
   const url = new URL(req.url);
   const body: any = ["POST", "PUT", "PATCH"].includes(req.method) ? await req.json().catch(() => ({})) : {};
-  const code = normCode(body.code ?? url.searchParams.get("code"));
-  const meta = await huishouden(code);
-  if (!meta) return fout("Onbekende huishoudcode.", 404);
+  const t = await toegang(req); if (t instanceof Response) return t;
+  const { id: code, meta } = t;
   const s = store();
   const prefix = `hh/${code}/bon/`;
 
@@ -34,7 +34,7 @@ export default async (req: Request, context: Context) => {
   }
 
   if (req.method === "POST") {
-    const ids: string[] = (Array.isArray(body.ids) ? body.ids : []).filter(validId).slice(0, 200);
+    const ids: string[] = (Array.isArray(body.ids) ? body.ids : []).filter(validId).slice(0, 100);
     const bonnen = (
       await Promise.all(
         ids.map(async (id) => {
@@ -49,6 +49,7 @@ export default async (req: Request, context: Context) => {
   if (req.method === "PUT") {
     const id = body?.bon?.id;
     if (!validId(id)) return fout("Ongeldige bon.");
+    if (JSON.stringify(body.bon).length > 100_000) return fout("Deze bon is te groot.", 413);
     const bestond = await s.getMetadata(prefix + id);
     const bon = schoonBon(body.bon);
     const { etag } = await s.setJSON(prefix + id, bon);

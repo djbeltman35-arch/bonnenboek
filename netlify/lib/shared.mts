@@ -1,4 +1,5 @@
 import { getStore } from "@netlify/blobs";
+import { timingSafeEqual } from "node:crypto";
 
 export const store = () => getStore({ name: "bonnenboek", consistency: "strong" });
 
@@ -8,7 +9,12 @@ const ID_RE = /^[a-z0-9-]{6,64}$/;
 export const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), {
     status,
-    headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "no-store",
+      "x-content-type-options": "nosniff",
+      "referrer-policy": "no-referrer",
+    },
   });
 
 export const fout = (bericht: string, status = 400) => json({ fout: bericht }, status);
@@ -22,13 +28,43 @@ export function normCode(c: unknown): string | null {
 
 export const validId = (id: unknown): id is string => typeof id === "string" && ID_RE.test(id);
 
-/** Returns household meta or null when the code does not exist. */
-export async function huishouden(code: string | null) {
+export type Meta = { naam: string; aangemaakt: string; token?: string; code?: string; codeVervangen?: boolean };
+const HH_RE = /^(?:[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}|h[0-9a-f]{24})$/;
+
+export const nieuwToken = () => {
+  const b = new Uint8Array(32); crypto.getRandomValues(b);
+  return btoa(String.fromCharCode(...b)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+};
+export const nieuwId = () => {
+  const b = new Uint8Array(12); crypto.getRandomValues(b);
+  return "h" + Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+};
+export const metaVan = async (id: string) => (await store().get(`hh/${id}/meta`, { type: "json" })) as Meta | null;
+
+/** Zoekt bij een uitnodigingscode het huishouden. Oude huishoudens gebruiken hun code als id. */
+export async function zoekCode(code: string | null): Promise<{ id: string; meta: Meta } | null> {
   if (!code) return null;
-  return (await store().get(`hh/${code}/meta`, { type: "json" })) as
-    | { naam: string; aangemaakt: string }
-    | null;
+  const s = store();
+  const link = (await s.get(`code/${code}`, { type: "json" })) as { id: string } | null;
+  if (link?.id) { const meta = await metaVan(link.id); return meta ? { id: link.id, meta } : null; }
+  const meta = await metaVan(code);
+  if (meta && !meta.codeVervangen && (!meta.code || meta.code === code)) return { id: code, meta };
+  return null;
 }
+
+/** Controleert de toegangssleutel van het toestel. Geeft het huishouden terug, of een foutantwoord. */
+export async function toegang(req: Request): Promise<{ id: string; meta: Meta } | Response> {
+  const id = req.headers.get("x-huishouden") ?? "";
+  const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
+  if (!HH_RE.test(id) || token.length < 40) return fout("Dit toestel is niet aangemeld. Doe opnieuw mee met de code van je huishouden.", 401);
+  const meta = await metaVan(id);
+  const a = new TextEncoder().encode(token), b = new TextEncoder().encode(meta?.token ?? "");
+  if (!meta || !meta.token || a.length !== b.length || !timingSafeEqual(a, b))
+    return fout("Dit toestel is afgemeld. Vraag de code van je huishouden en doe opnieuw mee.", 401);
+  return { id, meta };
+}
+
+export const wacht = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export function nieuweCode(): string {
   const abc = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";

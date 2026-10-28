@@ -1,12 +1,20 @@
 import type { Config } from "@netlify/functions";
 import Anthropic from "@anthropic-ai/sdk";
-import { json, fout, normCode, huishouden, CATS } from "../lib/shared.mts";
+import { store, json, fout, toegang, CATS } from "../lib/shared.mts";
 
-// POST /api/scan  {code, images:["data:image/jpeg;base64,…", …]}
+const MAX_PER_DAG = 150; // beschermt tegen misbruik en onverwachte kosten
+
+// POST /api/scan  (aangemeld) {images:["data:image/jpeg;base64,…", …]}
 // Leest een kassabon uit via Claude (Netlify AI Gateway) en geeft gestructureerde gegevens terug.
 export default async (req: Request) => {
+  const t = await toegang(req); if (t instanceof Response) return t;
+  const dag = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Amsterdam" });
+  const teller = `hh/${t.id}/scans/${dag}`;
+  const s = store();
+  const n = Number(await s.get(teller)) || 0;
+  if (n >= MAX_PER_DAG) return fout(`Jullie hebben vandaag al ${MAX_PER_DAG} bonnen gescand. Morgen kan het weer; voer de bon nu handmatig in.`, 429);
+  await s.set(teller, String(n + 1));
   const body: any = await req.json().catch(() => ({}));
-  if (!(await huishouden(normCode(body.code)))) return fout("Onbekende huishoudcode.", 404);
   if (!Netlify.env.get("ANTHROPIC_API_KEY") && !Netlify.env.get("ANTHROPIC_BASE_URL"))
     return fout("Automatisch uitlezen is nog niet actief op deze site.", 503);
 

@@ -1,11 +1,11 @@
 import type { Config } from "@netlify/functions";
-import { store, json, fout, normCode, huishouden } from "../lib/shared.mts";
+import { store, json, fout, toegang } from "../lib/shared.mts";
 import { meldPersoon } from "../lib/push.mts";
 
 // GET    /api/push                          -> { publicKey }
-// POST   /api/push {code, naam, sub}        -> meldingen aan voor dit toestel
-// DELETE /api/push {code, endpoint}         -> meldingen uit
-// PUT    /api/push {code, naam}             -> testmelding
+// POST   /api/push {naam, sub}        -> meldingen aan voor dit toestel
+// DELETE /api/push {endpoint}         -> meldingen uit
+// PUT    /api/push {naam}             -> testmelding
 async function sleutel(endpoint: string) {
   const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(endpoint));
   return Array.from(new Uint8Array(d).slice(0, 16), (b) => b.toString(16).padStart(2, "0")).join("");
@@ -16,17 +16,25 @@ export default async (req: Request) => {
     const publicKey = Netlify.env.get("VAPID_PUBLIC_KEY");
     return publicKey ? json({ publicKey }) : fout("Meldingen zijn nog niet ingesteld op deze site.", 503);
   }
+  const t = await toegang(req); if (t instanceof Response) return t;
+  const code = t.id;
   const body: any = await req.json().catch(() => ({}));
-  const code = normCode(body.code);
-  if (!(await huishouden(code))) return fout("Onbekende huishoudcode.", 404);
   const s = store();
 
   if (req.method === "POST") {
     const sub = body.sub;
-    if (!sub?.endpoint || !/^https:\/\//.test(sub.endpoint)) return fout("Ongeldig abonnement.");
+    // Alleen echte pushdiensten van Google, Apple, Mozilla en Microsoft (geen willekeurige adressen).
+    let host = "";
+    try { const u = new URL(String(sub?.endpoint)); if (u.protocol === "https:") host = u.hostname; } catch {}
+    const toegestaan = /(^|\.)(fcm\.googleapis\.com|android\.googleapis\.com|push\.apple\.com|push\.services\.mozilla\.com|notify\.windows\.com)$/;
+    if (!toegestaan.test(host) || typeof sub?.keys?.p256dh !== "string" || typeof sub?.keys?.auth !== "string")
+      return fout("Ongeldig abonnement.");
     const naam = String(body.naam ?? "").trim().slice(0, 40);
     if (!naam) return fout("Stel eerst je naam in.");
-    await s.setJSON(`hh/${code}/push/${await sleutel(sub.endpoint)}`, { naam, sub, sinds: new Date().toISOString() });
+    const { blobs } = await s.list({ prefix: `hh/${code}/push/` });
+    if (blobs.length >= 30) return fout("Er zijn al te veel toestellen aangemeld voor meldingen.", 429);
+    const schoon = { endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh.slice(0, 200), auth: sub.keys.auth.slice(0, 100) } };
+    await s.setJSON(`hh/${code}/push/${await sleutel(sub.endpoint)}`, { naam, sub: schoon, sinds: new Date().toISOString() });
     return json({ ok: true });
   }
   if (req.method === "DELETE") {

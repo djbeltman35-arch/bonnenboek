@@ -46,19 +46,34 @@ const uid = () => (crypto.randomUUID ? crypto.randomUUID() : (Date.now().toStrin
 const $ = id => document.getElementById(id);
 
 /* ================= persistence ================= */
-function load(){ try{ const j=JSON.parse(localStorage.getItem(LS)||"null"); if(j) Object.assign(st,{code:j.code||null,hhNaam:j.hhNaam||"",mijnNaam:j.mijnNaam||"",bonnen:j.bonnen||{},budgetCent:j.budgetCent??null,regels:j.regels||[],rekeningen:j.rekeningen||{},pushOn:!!j.pushOn,queue:j.queue||[],lastSync:j.lastSync||null}) }catch(e){} }
-function save(){ try{ localStorage.setItem(LS,JSON.stringify({code:st.code,hhNaam:st.hhNaam,mijnNaam:st.mijnNaam,bonnen:st.bonnen,budgetCent:st.budgetCent,regels:st.regels,rekeningen:st.rekeningen,pushOn:st.pushOn,queue:st.queue,lastSync:st.lastSync})) }catch(e){} }
+function load(){ try{ const j=JSON.parse(localStorage.getItem(LS)||"null"); if(j) Object.assign(st,{code:j.code||null,hh:j.hh||null,token:j.token||null,hhNaam:j.hhNaam||"",mijnNaam:j.mijnNaam||"",bonnen:j.bonnen||{},budgetCent:j.budgetCent??null,regels:j.regels||[],rekeningen:j.rekeningen||{},pushOn:!!j.pushOn,queue:j.queue||[],lastSync:j.lastSync||null}) }catch(e){} }
+function save(){ try{ localStorage.setItem(LS,JSON.stringify({code:st.code,hh:st.hh,token:st.token,hhNaam:st.hhNaam,mijnNaam:st.mijnNaam,bonnen:st.bonnen,budgetCent:st.budgetCent,regels:st.regels,rekeningen:st.rekeningen,pushOn:st.pushOn,queue:st.queue,lastSync:st.lastSync})) }catch(e){} }
 
 /* ================= api ================= */
 async function api(method, path, body, timeoutMs=20000){
   const ctl=new AbortController(); const t=setTimeout(()=>ctl.abort(),timeoutMs);
   try{
-    const res=await fetch(path,{method,signal:ctl.signal,headers:body?{"content-type":"application/json"}:{},body:body?JSON.stringify(body):undefined});
+    const headers={}; if(body) headers["content-type"]="application/json";
+    if(st.token&&st.hh&&path.startsWith("/api/")){ headers["authorization"]="Bearer "+st.token; headers["x-huishouden"]=st.hh }
+    const res=await fetch(path,{method,signal:ctl.signal,headers,body:body?JSON.stringify(body):undefined,credentials:"omit",cache:"no-store"});
     const data=await res.json().catch(()=>({}));
+    if(res.status===401&&st.token&&!path.startsWith("/api/huishouden?")){ afgemeld(data.fout); }
     if(!res.ok){ const e=new Error(data.fout||("Fout "+res.status)); e.status=res.status; throw e }
     return data;
   } catch(e){ if(e.name==="AbortError"){ const x=new Error("Geen verbinding met de server."); x.status=0; throw x } throw e }
   finally{ clearTimeout(t) }
+}
+
+function afgemeld(msg){
+  Object.assign(st,{code:null,hh:null,token:null,hhNaam:"",bonnen:{},queue:[],budgetCent:null,regels:[],rekeningen:{},lastSync:null}); save();
+  if(typeof closeSheet==="function") closeSheet(); render();
+  const e=$("wErr"); if(e){ e.hidden=false; e.textContent=msg||"Dit toestel is afgemeld. Vraag de code van je huishouden en doe opnieuw mee." }
+}
+/** Oude installaties hebben alleen de code: haal eenmalig de toegangssleutel op. */
+async function zorgVoorSleutel(){
+  if(!st.code||(st.token&&st.hh)) return true;
+  try{ const r=await api("GET","/api/huishouden?code="+encodeURIComponent(st.code)); st.hh=r.id; st.token=r.token; st.code=r.code; save(); return true }
+  catch(e){ if(e.status===404) afgemeld("De code van jullie huishouden is vervangen. Vraag de nieuwe code en doe opnieuw mee."); return false }
 }
 
 /* ================= sync ================= */
@@ -66,11 +81,11 @@ let syncing=false, syncAgain=false;
 async function flushQueue(){
   while(st.queue.length){
     const op=st.queue[0];
-    if(op.t==="put"){ const b=st.bonnen[op.id]; if(b){ const {etag}=await api("PUT","/api/bonnen",{code:st.code,bon:strip(b)}); b.etag=etag; delete b._pend } }
-    else if(op.t==="del"){ await api("DELETE",`/api/bonnen?code=${encodeURIComponent(st.code)}&id=${encodeURIComponent(op.id)}`) }
-    else if(op.t==="budget"){ await api("PATCH","/api/bonnen",{code:st.code,budgetCent:op.c}) }
-    else if(op.t==="inst"){ await api("PATCH","/api/bonnen",{code:st.code,instellingen:op.patch}) }
-    else if(op.t==="notify"){ const r=await api("PUT","/api/push",{code:st.code,naam:op.naar,soort:"betaald",van:op.van,cent:op.cent,aantal:op.aantal}).catch(()=>null);
+    if(op.t==="put"){ const b=st.bonnen[op.id]; if(b){ const {etag}=await api("PUT","/api/bonnen",{bon:strip(b)}); b.etag=etag; delete b._pend } }
+    else if(op.t==="del"){ await api("DELETE",`/api/bonnen?id=${encodeURIComponent(op.id)}`) }
+    else if(op.t==="budget"){ await api("PATCH","/api/bonnen",{budgetCent:op.c}) }
+    else if(op.t==="inst"){ await api("PATCH","/api/bonnen",{instellingen:op.patch}) }
+    else if(op.t==="notify"){ const r=await api("PUT","/api/push",{naam:op.naar,soort:"betaald",van:op.van,cent:op.cent,aantal:op.aantal}).catch(()=>null);
       if(r&&r.toestellen===0) toast(`${op.naar} heeft geen meldingen aanstaan en ziet de betaling bij het openen van de app.`) }
     st.queue.shift(); save();
   }
@@ -81,8 +96,9 @@ async function sync(){
   if(syncing){ syncAgain=true; return }
   syncing=true; setSync("busy");
   try{
+    if(!(await zorgVoorSleutel())) return;
     await flushQueue();
-    const r=await api("GET",`/api/bonnen?code=${encodeURIComponent(st.code)}`);
+    const r=await api("GET","/api/bonnen");
     st.hhNaam=r.naam||st.hhNaam;
     if(!st.queue.some(o=>o.t==="budget")) st.budgetCent=r.budgetCent;
     if(!st.queue.some(o=>o.t==="inst")){ st.regels=r.regels||[]; st.rekeningen=r.rekeningen||{} }
@@ -91,12 +107,12 @@ async function sync(){
     for(const id of Object.keys(st.bonnen)) if(!serverIds.has(id)&&!pendingIds.has(id)) delete st.bonnen[id];
     const need=r.index.filter(x=>!pendingIds.has(x.id)&&st.bonnen[x.id]?.etag!==x.etag).map(x=>x.id);
     for(let i=0;i<need.length;i+=100){
-      const {bonnen}=await api("POST","/api/bonnen",{code:st.code,ids:need.slice(i,i+100)},30000);
+      const {bonnen}=await api("POST","/api/bonnen",{ids:need.slice(i,i+100)},30000);
       for(const b of bonnen) st.bonnen[b.id]=b;
     }
     st.lastSync=new Date().toISOString(); save(); setSync("ok"); render();
   }catch(e){
-    if(e.status===404){ setSync("error"); render(); toast("Deze huishoudcode bestaat niet meer.") }
+    if(e.status===401){ /* afgemeld() is al aangeroepen */ }
     else setSync(navigator.onLine?"error":"off");
   }finally{
     syncing=false; if(syncAgain){ syncAgain=false; setTimeout(sync,50) }
@@ -278,9 +294,9 @@ async function enablePush(silent){
   if(perm!=="granted") throw new Error("Meldingen zijn geweigerd. Zet ze aan in de instellingen van je telefoon bij Bonnenboek.");
   const reg=await navigator.serviceWorker.ready; const {publicKey}=await api("GET","/api/push");
   let sub=await reg.pushManager.getSubscription(); if(!sub) sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64u(publicKey)});
-  await api("POST","/api/push",{code:st.code,naam:st.mijnNaam,sub:sub.toJSON()});
+  await api("POST","/api/push",{naam:st.mijnNaam,sub:sub.toJSON()});
   st.pushOn=true; save();
-  if(!silent){ const r=await api("PUT","/api/push",{code:st.code,naam:st.mijnNaam});
+  if(!silent){ const r=await api("PUT","/api/push",{naam:st.mijnNaam});
     if(r.fouten&&r.fouten.length) throw new Error("Versturen mislukt: "+r.fouten.join("; "));
     if(!r.toestellen) throw new Error(`Geen toestel gevonden voor "${st.mijnNaam}". Bekend: ${(r.namen||[]).join(", ")||"geen"}.`);
     return r }
@@ -484,14 +500,26 @@ function settingsSheet(){
     <label class="field"><span class="lbl">Jouw naam (zichtbaar bij je bonnen)</span><input class="inp" id="sNaam" value="${esc(st.mijnNaam)}"></label>
     <p class="note">Laatst bijgewerkt: ${esc(last)}${pend?` · ${pend} wijziging${pend>1?"en":""} wacht${pend>1?"en":""} op verbinding`:""}</p>
     <div class="actions">${isStandalone()?"":`<button class="btn ghost" data-install>App installeren</button>`}<a class="btn ghost" href="/handleiding.html">Handleiding</a></div>
+    <span class="lbl" style="margin-top:6px">Beveiliging</span>
+    <p class="note">Is de code of uitnodiging bij iemand terechtgekomen die er niet bij hoort? Maak dan een nieuwe code. Toestellen die al meedoen, blijven gewoon werken.</p>
+    <div class="actions"><button class="btn ghost" data-newcode>Nieuwe code maken</button><button class="btn ghost" data-kick>Andere toestellen afmelden</button></div>
     <button class="linkbtn" data-leave style="align-self:flex-start;color:var(--bad)">Dit toestel loskoppelen van het huishouden</button>`,
   sh=>{ sh.querySelector("[data-share]").onclick=shareInvite;
     sh.querySelector("[data-copy]").onclick=()=>copy(inviteLink(),"Link gekopieerd");
     sh.querySelector("#sNaam").addEventListener("change",e=>{ st.mijnNaam=e.target.value.trim(); save(); toast("Naam opgeslagen"); if(st.pushOn) enablePush(true).catch(()=>{}) });
     sh.querySelector("[data-regels]").onclick=regelsSheet;
+    sh.querySelector("[data-newcode]").onclick=()=>confirmSheet("Nieuwe code maken?",`De huidige code <b class="mono">${esc(st.code)}</b> en oude uitnodigingslinks werken daarna niet meer. Iedereen die al meedoet, blijft gewoon werken.`,"Nieuwe code maken",async()=>{
+      const r=await api("PATCH","/api/huishouden",{actie:"nieuweCode"}); st.code=r.code; save(); toast("Nieuwe code: "+r.code); settingsSheet() });
+    sh.querySelector("[data-kick]").onclick=()=>confirmSheet("Andere toestellen afmelden?","Alle andere telefoons worden afgemeld en moeten opnieuw meedoen met de code. Maak eerst een nieuwe code als de oude bij de verkeerde persoon is beland. Jouw toestel blijft aangemeld.","Afmelden",async()=>{
+      const r=await api("PATCH","/api/huishouden",{actie:"afmelden"}); st.token=r.token; save(); toast("Andere toestellen zijn afgemeld"); settingsSheet() });
     const ib=sh.querySelector("[data-install]"); if(ib) ib.onclick=installFlow;
     sh.querySelector("[data-leave]").onclick=()=>{ openSheet(`${head("Loskoppelen?")}<p class="note">De bonnen blijven bewaard voor de anderen. Je kunt later weer meedoen met code <b class="mono">${esc(st.code)}</b>.</p>${st.queue.length?`<p class="err">Let op: ${st.queue.length} wijziging(en) zijn nog niet verstuurd en gaan verloren.</p>`:""}<div class="actions"><button class="btn danger" data-yes>Loskoppelen</button><button class="btn ghost" data-no>Annuleren</button></div>`,
-      s2=>{ s2.querySelector("[data-no]").onclick=settingsSheet; s2.querySelector("[data-yes]").onclick=()=>{ Object.assign(st,{code:null,hhNaam:"",bonnen:{},queue:[],budgetCent:null,regels:[],rekeningen:{},lastSync:null}); save(); closeSheet(); render() } }) } });
+      s2=>{ s2.querySelector("[data-no]").onclick=settingsSheet; s2.querySelector("[data-yes]").onclick=()=>{ Object.assign(st,{code:null,hh:null,token:null,hhNaam:"",bonnen:{},queue:[],budgetCent:null,regels:[],rekeningen:{},lastSync:null}); save(); closeSheet(); render() } }) } });
+}
+function confirmSheet(titel,tekst,knop,actie){
+  openSheet(`${head(titel)}<p class="note">${tekst}</p><p class="err" id="cErr" hidden></p><div class="actions"><button class="btn danger" data-yes>${esc(knop)}</button><button class="btn ghost" data-no>Annuleren</button></div>`,
+    sh=>{ sh.querySelector("[data-no]").onclick=settingsSheet;
+      sh.querySelector("[data-yes]").onclick=async e=>{ e.target.disabled=true; try{ await actie() }catch(x){ const el=sh.querySelector("#cErr"); el.hidden=false; el.textContent=x.message; e.target.disabled=false } } });
 }
 async function shareInvite(){
   const text=`Doe mee met ons Bonnenboek "${st.hhNaam}" om samen de boodschappen bij te houden. Code: ${st.code}`;
@@ -654,7 +682,7 @@ async function nextInQueue(){
     if(!navigator.onLine) throw Object.assign(new Error("offline"),{status:0});
     const parts=[]; for(const it of grp) parts.push(await prepare(it));
     const images=parts.filter(p=>p.file).map(p=>p.file); const text=parts.filter(p=>p.text).map(p=>p.text).join("\n\n");
-    const res=await api("POST","/api/scan",{code:st.code,images,text},70000);
+    const res=await api("POST","/api/scan",{images,text},70000);
     if(cancelled) return;
     if(!res||res.isBon===false){ failSheet("Geen bon herkend","Hierin is geen kassabon te herkennen. Maak een foto recht van boven met de hele bon in beeld, of kies een schermafbeelding of PDF van de digitale bon."); return }
     const items=(Array.isArray(res.items)?res.items:[]).map(i=>({naam:String(i.naam||"").trim(),aantal:Number(i.aantal)||1,cent:parseEur(i.prijs),cat:CATS.includes(i.categorie)?i.categorie:"Overig"}));
@@ -692,12 +720,12 @@ function exportCsv(allMonths){
 /* ================= onboarding ================= */
 async function join(code){
   const err=$("wErr"); err.hidden=true;
-  try{ const r=await api("GET","/api/huishouden?code="+encodeURIComponent(code)); st.code=r.code; st.hhNaam=r.naam; st.bonnen={}; st.queue=[]; save(); history.replaceState(null,"",location.pathname+"#overzicht"); render(); sync(); toast("Welkom bij "+r.naam) }
-  catch(e){ err.hidden=false; err.textContent=e.status===404?"Deze code bestaat niet. Controleer de 8 tekens.":e.message }
+  try{ const r=await api("GET","/api/huishouden?code="+encodeURIComponent(code)); st.code=r.code; st.hh=r.id; st.token=r.token; st.hhNaam=r.naam; st.bonnen={}; st.queue=[]; save(); history.replaceState(null,"",location.pathname+"#overzicht"); render(); sync(); toast("Welkom bij "+r.naam) }
+  catch(e){ err.hidden=false; err.textContent=e.status===404?"Deze code bestaat niet of is vervangen. Controleer de 8 tekens.":e.status===429?"Te veel pogingen. Wacht een minuut en probeer het opnieuw.":e.message }
 }
 $("wNaam").addEventListener("change",e=>{ st.mijnNaam=e.target.value.trim(); save() });
 $("wNew").onclick=async e=>{ const err=$("wErr"); err.hidden=true; st.mijnNaam=$("wNaam").value.trim(); e.target.disabled=true;
-  try{ const r=await api("POST","/api/huishouden",{naam:$("wHh").value.trim()}); st.code=r.code; st.hhNaam=r.naam; st.bonnen={}; st.queue=[]; save(); render(); sync(); settingsSheet() }
+  try{ const r=await api("POST","/api/huishouden",{naam:$("wHh").value.trim()}); st.code=r.code; st.hh=r.id; st.token=r.token; st.hhNaam=r.naam; st.bonnen={}; st.queue=[]; save(); render(); sync(); settingsSheet() }
   catch(x){ err.hidden=false; err.textContent=x.message } finally{ e.target.disabled=false } };
 $("wJoin").onclick=()=>{ st.mijnNaam=$("wNaam").value.trim(); save(); const c=$("wCode").value.trim(); if(!c){ $("wErr").hidden=false; $("wErr").textContent="Vul eerst de code in."; return } join(c) };
 $("wCode").addEventListener("keydown",e=>{ if(e.key==="Enter") $("wJoin").click() });
