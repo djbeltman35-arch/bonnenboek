@@ -77,7 +77,7 @@ export function nieuweCode(): string {
 export const CATS = [
   "Groente & fruit", "Zuivel & eieren", "Vlees & vis", "Vega & alternatieven", "Brood & bakkerij",
   "Droge waren", "Diepvries", "Dranken", "Snacks & snoep", "Ontbijt & beleg", "Verzorging",
-  "Huishouden", "Baby & kind", "Dier", "Statiegeld", "Korting", "Overig",
+  "Huishouden", "Baby & kind", "Dier", "Statiegeld", "Korting", "Brandstof", "Overig",
 ];
 
 /** Cleans a receipt sent by a client so only known fields of the right type are stored. */
@@ -90,11 +90,13 @@ export function schoonBon(b: any) {
     aantal: Math.max(0, Number(i?.aantal) || 1),
     cent: int(i?.cent),
     cat: CATS.includes(i?.cat) ? i.cat : "Overig",
+    ...(Number(i?.liters) > 0 && Number(i?.liters) < 10000 ? { liters: Math.round(Number(i.liters) * 1000) / 1000 } : {}),
   }));
   return {
     winkel: str(b?.winkel, 80) || "Onbekend",
     datum,
     totaalCent: int(b?.totaalCent),
+    groep: b?.groep === "tanken" ? "tanken" : b?.groep === "boodschappen" ? "boodschappen" : "",
     items,
     betaalwijze: ["pin", "contant", "creditcard", "anders"].includes(b?.betaalwijze) ? b.betaalwijze : "",
     bron: b?.bron === "scan" ? "scan" : "handmatig",

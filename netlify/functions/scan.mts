@@ -36,7 +36,7 @@ export default async (req: Request) => {
   const vandaag = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Amsterdam" });
   const prompt = `Hierboven staat één kassabon (meestal Nederlands, Belgisch of Duits): een foto van een papieren bon, een schermafbeelding of PDF van een digitale bon uit de app of e-mail van de winkel, of geplakte tekst. Meerdere delen horen samen bij dezelfde bon. Lees de bon zorgvuldig uit.
 Geef ALLEEN een JSON-object terug, zonder uitleg of codeblok, in exact dit formaat:
-{"isBon":true,"winkel":"Albert Heijn","datum":"2026-10-25","totaal":34.56,"betaalwijze":"pin","items":[{"naam":"Halfvolle melk 1L","aantal":2,"prijs":2.38,"categorie":"Zuivel & eieren"}]}
+{"isBon":true,"groep":"boodschappen","winkel":"Albert Heijn","datum":"2026-10-25","totaal":34.56,"betaalwijze":"pin","items":[{"naam":"Halfvolle melk 1L","aantal":2,"prijs":2.38,"categorie":"Zuivel & eieren"}]}
 Regels:
 - "totaal": het eindbedrag dat werkelijk betaald is (na kortingen), getal in euro met punt als decimaalteken.
 - "datum" als JAAR-MAAND-DAG; vandaag is ${vandaag}. Onleesbaar: null.
@@ -48,7 +48,9 @@ Regels:
 - "betaalwijze": "pin", "contant", "creditcard", "anders" of null. iDEAL, incasso of betalen via een app is "anders".
 - Online boodschappen (zoals Picnic, AH thuisbezorgd, Jumbo bezorgen, Crisp): gebruik de leverdatum als datum, de bezorgdienst als winkel (bijv. "Picnic"), en neem bezorg- of servicekosten op als regel met categorie "Overig".
 - Een bon of factuur kan meerdere pagina's hebben: neem alle producten van alle pagina's mee.
-- Elke aankoopbon telt, ook van een tankstation, drogisterij, bakker, markt of webwinkel. Brandstof krijgt categorie "Overig".
+- Elke aankoopbon telt, ook van een tankstation, drogisterij, bakker, markt of webwinkel.
+- Brandstof (benzine, Euro 95/98, E10, diesel, LPG, AdBlue) krijgt categorie "Brandstof" en een extra veld "liters" met het getankte volume als getal, bijv. {"naam":"Euro 95","aantal":1,"prijs":67.63,"liters":30.34,"categorie":"Brandstof"}. Winkelartikelen bij een tankstation (snacks, koffie, carwash) krijgen hun gewone categorie.
+- "groep": "tanken" als de bon vooral brandstof is, anders "boodschappen".
 - Alleen als er echt geen bon of aankoop te zien is: {"isBon":false}.`;
 
   try {
