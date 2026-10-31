@@ -491,7 +491,8 @@ function editSheet(r,info){
       <label class="field"><span class="lbl">Soort uitgave</span><select id="eGroep"><option value="boodschappen"${isTank(r)?"":" selected"}>Boodschappen</option><option value="tanken"${isTank(r)?" selected":""}>Tanken</option></select></label>
       <label class="field"><span class="lbl">Betaalwijze</span><select id="eBetaal">${["","pin","contant","creditcard","anders"].map(o=>`<option value="${o}"${o===(r.betaalwijze||"")?" selected":""}>${o||"—"}</option>`).join("")}</select></label>
     </div>
-    <p class="note">${r.id?`Ingevoerd door <b>${esc(r.door||"onbekend")}</b>.`:(st.mijnNaam?`Deze bon telt mee voor <b>${esc(st.mijnNaam)}</b>.`:`Stel je naam in (rechtsboven) zodat de bon op jouw naam komt.`)}</p>
+    <label class="field"><span class="lbl">Naam (van wie is deze bon)</span><input id="eNaam" list="eNamen" autocomplete="off" value="${esc(r.id?buyer(r).replace(/^Onbekend$/,""):(r.door||st.mijnNaam||""))}" placeholder="Bijv. Erik of Hilde"></label>
+    <datalist id="eNamen">${[...new Set([...knownPeople(),...st.regels.flatMap(g=>[g.van,g.aan])])].map(n=>`<option value="${esc(n)}">`).join("")}</datalist>
     <datalist id="storeList">${stores.map(s=>`<option value="${esc(s)}">`).join("")}</datalist>
     <div class="sechead"><span class="lbl">Producten (optioneel)</span><button class="linkbtn" data-add>+ Regel</button></div>
     <div class="items" id="eItems">${r.items.map(itemRow).join("")}</div>
@@ -509,6 +510,7 @@ function editSheet(r,info){
     const skip=sh.querySelector("[data-skip]"); if(skip) skip.onclick=()=>nextInQueue();
     sh.querySelector("[data-save]").onclick=()=>{ read(); const err=sh.querySelector("#eErr");
       r.winkel=sh.querySelector("#eWinkel").value.trim(); r.datum=sh.querySelector("#eDatum").value||today(); r.betaalwijze=sh.querySelector("#eBetaal").value; r.groep=sh.querySelector("#eGroep").value;
+      { const nm=sh.querySelector("#eNaam").value.trim().slice(0,40); if(nm){ r.door=nm; r.gekochtDoor=nm; r.betaaldDoor=nm } else if(!r.id&&!st.mijnNaam){ err.hidden=false; err.textContent="Vul in van wie deze bon is."; return } }
       r.totaalCent=parseEur(sh.querySelector("#eTotaal").value); if(!r.totaalCent&&r.items.length) r.totaalCent=sumItems(r.items);
       if(!r.winkel){ err.hidden=false; err.textContent="Vul de naam van de winkel in."; return }
       if(!r.totaalCent){ err.hidden=false; err.textContent="Vul het totaalbedrag in, bijvoorbeeld 23,45."; return }
