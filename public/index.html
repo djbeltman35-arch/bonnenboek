@@ -85,6 +85,10 @@ nav.tabs a[aria-current="page"]{background:var(--ink);color:var(--paper)}
 .kpi{display:flex;flex-direction:column;gap:2px;min-width:0}
 .kpi b{font-family:var(--f-mono);font-size:17px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
+.bespaar .plink{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;text-decoration:none;color:var(--ink);background:var(--bg)}
+.bespaar .plink b{font-size:15px}.bespaar .plink span{font-size:13px;color:var(--muted)}
+.bespaar .plink[rel~=sponsored]{border-color:var(--accent-soft)}
+.bespaar .plink:hover{border-color:var(--accent)}
 section.card{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px}
 section.card h3{font-size:17px;font-weight:600}
 .sechead{display:flex;justify-content:space-between;align-items:baseline;gap:8px}

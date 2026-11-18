@@ -391,6 +391,7 @@ function renderOverview(){
     html+=`<section class="card"><div class="sechead"><h3>Waar gaat het heen?</h3><a class="linkbtn" href="#analyse">Alles</a></div>${cats.length?catBars(cats):'<p class="note">Geen boodschappen in deze maand.</p>'}</section>`;
     const recent=[...alle].sort(sortRec).slice(0,4);
     if(recent.length) html+=`<section class="card"><div class="sechead"><h3>Laatste bonnen</h3><a class="linkbtn" href="#bonnen">Alle ${alle.length}</a></div><div class="daygroup">${recent.map(slip).join("")}</div></section>`;
+    html+=bespaarCard();
   }
   $("view").innerHTML=html;
 }
@@ -426,6 +427,16 @@ function renderList(){
   const qi=$("q"); qi.addEventListener("input",()=>{ st.query=qi.value; renderList() });
   if(hadFocus){ qi.focus(); qi.setSelectionRange(pos,pos) }
 }
+function bespaarCard(){
+  const aw=(mid,ref)=>`https://www.awin1.com/cread.php?awinmid=${mid}&awinaffid=3152283&clickref=${ref}`;
+  return `<section class="card bespaar"><h3>Minder uitgeven</h3>
+    <a class="plink" href="https://boodschappenvergelijk.nl/" target="_blank" rel="noopener"><b>🛒 Vergelijk supermarktprijzen</b><span>Zie per product waar het het goedkoopst is</span></a>
+    <a class="plink" href="https://goedkopertanken.netlify.app/" target="_blank" rel="noopener"><b>⛽ Goedkoper tanken</b><span>Live brandstofprijzen bij jou in de buurt</span></a>
+    <a class="plink" href="${aw(82075,"bonnenboek")}" target="_blank" rel="sponsored noopener"><b>🥕 Boerschappen</b><span>Boodschappenbox met producten van Nederlandse boeren</span></a>
+    <a class="plink" href="${aw(8591,"bonnenboek")}" target="_blank" rel="sponsored noopener"><b>🍲 Marley Spoon</b><span>Maaltijdbox: precies genoeg ingrediënten, minder weggooien</span></a>
+    <a class="plink" href="https://bespaarvriend.nl/" target="_blank" rel="noopener"><b>💡 Meer besparen</b><span>Zorg, energie en internet: tips en vergelijkers</span></a>
+    <p class="note">Boerschappen en Marley Spoon zijn advertenties. Bestel je via deze links, dan krijgt Bonnenboek een kleine vergoeding. Jij betaalt niets extra.</p>
+  </section>` }
 function renderAnalyse(){
   const alle=monthBonnen(); const list=alle.filter(isBood); const tl=alle.filter(isTank);
   const months=[...Array(6)].map((_,i)=>shiftYm(st.ym,i-5));
@@ -447,6 +458,7 @@ function renderAnalyse(){
     html+=`<section class="card tank"><div class="sechead"><h3>Tanken</h3><span class="lbl num">${eur(t.c)}</span></div>
       ${tl.length?`<div class="stores">${byStore(tl).map(([n,o])=>`<div class="r"><span class="store" style="background:${storeColor(n)}">${esc(initials(n))}</span><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(n)}</span><span class="c">${o.n}×</span><span class="num">${eur(o.c)}</span></div>`).join("")}</div>`:'<p class="note">Deze maand niet getankt.</p>'}
       <p class="note">${t.l?`Deze maand ${literFmt(t.l)}, gemiddeld ${ppl(t.pl)} per liter. `:""}${st6.l?`Laatste 6 maanden gemiddeld ${ppl(st6.pl)} per liter.`:""}</p></section>`; }
+  html+=bespaarCard();
   $("view").innerHTML=html;
 }
 /* ================= sheets ================= */
