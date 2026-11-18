@@ -1,5 +1,5 @@
 // Bonnenboek service worker: app shell offline, API always live.
-const CACHE = "bonnenboek-v12";
+const CACHE = "bonnenboek-v13";
 const SHARE = "bonnenboek-gedeeld";
 const SHELL = ["/", "/index.html", "/app.js", "/manifest.webmanifest", "/icons/icon.svg", "/icons/icon-192.png", "/icons/apple-touch-icon.png", "/handleiding.html"];
 

@@ -428,12 +428,15 @@ function renderList(){
   if(hadFocus){ qi.focus(); qi.setSelectionRange(pos,pos) }
 }
 function bespaarCard(){
-  const aw=(mid,ref)=>`https://www.awin1.com/cread.php?awinmid=${mid}&awinaffid=3152283&clickref=${ref}`;
+  const aw=(mid,ref,u)=>`https://www.awin1.com/cread.php?awinmid=${mid}&awinaffid=3152283&clickref=${ref}`+(u?`&ued=${encodeURIComponent(u)}`:"");
+  const chip=(mid,u,t)=>`<a href="${aw(mid,"bonnenboek",u)}" target="_blank" rel="sponsored noopener">${t}</a>`;
   return `<section class="card bespaar"><h3>Minder uitgeven</h3>
     <a class="plink" href="https://boodschappenvergelijk.nl/" target="_blank" rel="noopener"><b>🛒 Vergelijk supermarktprijzen</b><span>Zie per product waar het het goedkoopst is</span></a>
     <a class="plink" href="https://goedkopertanken.netlify.app/" target="_blank" rel="noopener"><b>⛽ Goedkoper tanken</b><span>Live brandstofprijzen bij jou in de buurt</span></a>
     <a class="plink" href="${aw(82075,"bonnenboek")}" target="_blank" rel="sponsored noopener"><b>🥕 Boerschappen</b><span>Boodschappenbox met producten van Nederlandse boeren</span></a>
+    <div class="pchips">${chip(82075,"https://www.boerschappen.nl/kies-je-box/","Kies je box")}${chip(82075,"https://www.boerschappen.nl/maaltijdboxen/","Maaltijdboxen")}${chip(82075,"https://www.boerschappen.nl/specials/","Specials")}</div>
     <a class="plink" href="${aw(8591,"bonnenboek")}" target="_blank" rel="sponsored noopener"><b>🍲 Marley Spoon</b><span>Maaltijdbox: precies genoeg ingrediënten, minder weggooien</span></a>
+    <div class="pchips">${chip(8591,"https://marleyspoon.nl/menu","Menu van deze week")}${chip(8591,"https://marleyspoon.nl/select-plan","Kies je plan")}</div>
     <a class="plink" href="https://bespaarvriend.nl/" target="_blank" rel="noopener"><b>💡 Meer besparen</b><span>Zorg, energie en internet: tips en vergelijkers</span></a>
     <p class="note">Boerschappen en Marley Spoon zijn advertenties. Bestel je via deze links, dan krijgt Bonnenboek een kleine vergoeding. Jij betaalt niets extra.</p>
   </section>` }
