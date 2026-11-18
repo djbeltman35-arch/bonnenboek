@@ -433,12 +433,12 @@ function bespaarCard(){
   return `<section class="card bespaar"><h3>Minder uitgeven</h3>
     <a class="plink" href="https://boodschappenvergelijk.nl/" target="_blank" rel="noopener"><b>🛒 Vergelijk supermarktprijzen</b><span>Zie per product waar het het goedkoopst is</span></a>
     <a class="plink" href="https://goedkopertanken.netlify.app/" target="_blank" rel="noopener"><b>⛽ Goedkoper tanken</b><span>Live brandstofprijzen bij jou in de buurt</span></a>
-    <a class="plink" href="${aw(82075,"bonnenboek")}" target="_blank" rel="sponsored noopener"><b>🥕 Boerschappen</b><span>Boodschappenbox met producten van Nederlandse boeren</span></a>
+    <a class="plink" href="${aw(82075,"bonnenboek")}" target="_blank" rel="sponsored noopener"><b>🥕 Boodschappenbox van de boer</b><span>Verse producten van Nederlandse boeren, thuisbezorgd</span></a>
     <div class="pchips">${chip(82075,"https://www.boerschappen.nl/kies-je-box/","Kies je box")}${chip(82075,"https://www.boerschappen.nl/maaltijdboxen/","Maaltijdboxen")}${chip(82075,"https://www.boerschappen.nl/specials/","Specials")}</div>
-    <a class="plink" href="${aw(8591,"bonnenboek")}" target="_blank" rel="sponsored noopener"><b>🍲 Marley Spoon</b><span>Maaltijdbox: precies genoeg ingrediënten, minder weggooien</span></a>
+    <a class="plink" href="${aw(8591,"bonnenboek")}" target="_blank" rel="sponsored noopener"><b>🍲 Maaltijdbox</b><span>Precies genoeg ingrediënten, minder weggooien</span></a>
     <div class="pchips">${chip(8591,"https://marleyspoon.nl/menu","Menu van deze week")}${chip(8591,"https://marleyspoon.nl/select-plan","Kies je plan")}</div>
     <a class="plink" href="https://bespaarvriend.nl/" target="_blank" rel="noopener"><b>💡 Meer besparen</b><span>Zorg, energie en internet: tips en vergelijkers</span></a>
-    <p class="note">Boerschappen en Marley Spoon zijn advertenties. Bestel je via deze links, dan krijgt Bonnenboek een kleine vergoeding. Jij betaalt niets extra.</p>
+    <p class="note">De boodschappenbox en maaltijdbox zijn advertenties. Bestel je via deze links, dan krijgt Bonnenboek een kleine vergoeding. Jij betaalt niets extra.</p>
   </section>` }
 function renderAnalyse(){
   const alle=monthBonnen(); const list=alle.filter(isBood); const tl=alle.filter(isTank);
