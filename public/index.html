@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Bonnenboek</title>
 <meta name="description" content="Houd samen je boodschappenuitgaven bij door kassabonnen te scannen.">
-<meta name="theme-color" content="#0B6E50" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0F1512" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#0e7c4a" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121813" media="(prefers-color-scheme: dark)">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
@@ -20,10 +20,10 @@
 <style>
 /* Layout: phone-first kassarol — één kolom, samenvatting boven, bonnen als strookjes, vaste scanknop onderaan */
 :root{
-  --bg:#EEF2EE; --paper:#FBFCFA; --ink:#17211C; --muted:#5C6B63; --line:#D5DDD7;
-  --accent:#0B6E50; --accent-ink:#FFFFFF; --accent-soft:#D6EBE2;
+  --bg:#f4f7f1; --paper:#ffffff; --ink:#1e2a22; --muted:#5d6a61; --line:#e1e7dc;
+  --accent:#0e7c4a; --accent-ink:#FFFFFF; --accent-soft:#e2f2e8;
   --good:#1D7A47; --warn:#B26A00; --bad:#B3261E;
-  --c1:#0B6E50; --c2:#2F7FB8; --c3:#C0603A; --c4:#8A6BB8; --c5:#B8962F; --c6:#4F8F8A; --c7:#B8507A; --c8:#6B7B3A;
+  --c1:#0e7c4a; --c2:#2F7FB8; --c3:#C0603A; --c4:#8A6BB8; --c5:#B8962F; --c6:#4F8F8A; --c7:#B8507A; --c8:#6B7B3A;
   --shadow:0 1px 0 rgba(23,33,28,.06),0 6px 18px -10px rgba(23,33,28,.25);
   --f-display:"Bricolage Grotesque","Avenir Next","Segoe UI",system-ui,sans-serif;
   --f-body:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;
@@ -31,10 +31,10 @@
   color-scheme:light;
 }
 @media (prefers-color-scheme:dark){:root{
-  --bg:#0F1512; --paper:#18211C; --ink:#E6EEE9; --muted:#97A69E; --line:#2A3630;
-  --accent:#3FBF8F; --accent-ink:#06140E; --accent-soft:#183A2D;
+  --bg:#121813; --paper:#1a221c; --ink:#e9efe8; --muted:#a3b0a6; --line:#2b362e;
+  --accent:#3fbf7f; --accent-ink:#0f1a13; --accent-soft:#1d3326;
   --good:#4CC27E; --warn:#E3A13B; --bad:#F2766B;
-  --c1:#3FBF8F; --c2:#5FA8DE; --c3:#E58A63; --c4:#B297E0; --c5:#DDBB55; --c6:#73BDB7; --c7:#E07BA4; --c8:#9DB25A;
+  --c1:#3fbf7f; --c2:#5FA8DE; --c3:#E58A63; --c4:#B297E0; --c5:#DDBB55; --c6:#73BDB7; --c7:#E07BA4; --c8:#9DB25A;
   --shadow:0 1px 0 rgba(0,0,0,.3),0 8px 20px -12px rgba(0,0,0,.6);
   color-scheme:dark}}
 
@@ -262,6 +262,16 @@ footer.foot{font-size:12.5px;color:var(--muted);text-align:center;padding:8px 0}
 .mock{display:flex;flex-direction:column;gap:6px;transform:rotate(-2deg);background:var(--paper);border-radius:6px;padding:14px 16px;box-shadow:var(--shadow);font-family:var(--f-mono);font-size:13px;max-width:250px;align-self:center;width:100%}
 .mock div{display:flex;justify-content:space-between;gap:10px}
 .mock hr{border:0;border-top:1px dashed var(--line);margin:4px 0;width:100%}
+
+/* gbstijl:start */
+.maker{font-size:13px;color:var(--muted);margin:0 0 6px}
+.maker a{color:var(--ink);font-weight:700;text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px}
+.welcome .hero{text-align:center}
+.btn.primary{background:linear-gradient(180deg,#17a061 0%,#0e7c4a 55%,#0b6a3f 100%)!important;color:#fff!important;border:0!important;border-radius:10px!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.28),0 3px 0 #08502f,0 5px 10px rgba(8,80,47,.28)!important}
+.btn.primary:active{transform:translateY(2px)}
+.opt,.card{border-radius:4px!important}
+.inp{border-radius:4px!important;background:#fff}
+/* gbstijl:end */
 </style>
 </head>
 <body>
@@ -275,6 +285,7 @@ footer.foot{font-size:12.5px;color:var(--muted);text-align:center;padding:8px 0}
     <div><b>TOTAAL</b><b>6,66</b></div>
   </div>
   <div class="hero">
+    <p class="maker">Van de maker van <a href="https://boodschappenvergelijk.nl/?bron=bonnenboek">Boodschappenvergelijk.nl</a>, bekend van <a href="https://www.hartvannederland.nl/advies-en-tips/kopen-besparen/videos/goedkoop-boodschappen-doen-erik-bouwt-vergelijker" target="_blank" rel="noopener">Hart van Nederland</a> en <a href="https://www.oost.nl/nieuws/3720144/rijssenaar-erik-beltman-rekent-af-met-dure-boodschappen-in-vergelijkingswebsite" target="_blank" rel="noopener">RTV Oost</a></p>
     <h1>Bonnenboek</h1>
     <p>Fotografeer je kassabonnen en zie samen precies wat jullie aan boodschappen uitgeven, per maand, winkel en categorie.</p>
   </div>
